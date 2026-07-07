@@ -23,7 +23,7 @@ The goal isn't a leaderboard score. The goal is **ownership**: when something wo
 The full forward pass:
 
 $$
-x_0 = \text{Embed}(\text{input\_ids}) \qquad (B, T) \to (B, T, 960)
+x_0 = \text{Embed}(\text{input ids}) \qquad (B, T) \to (B, T, 960)
 $$
 
 $$
@@ -81,7 +81,7 @@ AdamW ($\beta_1=0.9$, $\beta_2=0.95$, wd=0.1), linear warmup → cosine decay. 1
 Same cross-entropy, now on instruction-response pairs. The gradient pushes mass toward a fixed demonstrated token at every position:
 
 $$
-\mathcal{L}_{\text{SFT}} = -\sum_t \log \pi_\theta(y^{*}_t \mid x, y^{*}_{<t})
+\mathcal{L}_{\text{SFT}} = -\sum_t \log \pi_\theta(y^{\ast}_t \mid x, y^{\ast}_{<t})
 $$
 
 SFT can only reinforce "matches this string." No mechanism to discover strategies that correlate with success.
@@ -139,7 +139,7 @@ $$
 The fixed point is a Boltzmann tilting of the reference policy by reward:
 
 $$
-\pi^*(y \mid x) \propto \pi_{\text{ref}}(y \mid x) \cdot \exp(R(y) / \beta)
+\pi^\ast(y \mid x) \propto \pi_{\text{ref}}(y \mid x) \cdot \exp(R(y) / \beta)
 $$
 
 Trajectories with above-average reward get exponentially amplified — regardless of whether they existed in any SFT dataset. This is how emergent chain-of-thought and self-correction arise.
