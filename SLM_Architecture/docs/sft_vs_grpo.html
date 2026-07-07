@@ -1,0 +1,523 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SFT ∵ GRPO — Gradient Geometry &amp; the Actual Difference</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,400;0,600;0,800;1,400;1,600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; font-size: 17px; }
+    body {
+      background: #faf9f7;
+      color: #1a1a1a;
+      font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'SF Mono', 'Menlo', monospace;
+      line-height: 1.75;
+      -webkit-font-smoothing: antialiased;
+    }
+    .container {
+      max-width: 880px;
+      margin: 0 auto;
+      padding: 3rem 1.5rem 8rem;
+    }
+
+    /* ── headings ── */
+    h1, h2, h3, h4 {
+      font-family: 'Georgia', 'Times New Roman', serif;
+      font-weight: 900;
+      letter-spacing: -0.01em;
+      line-height: 1.2;
+    }
+    h1 {
+      font-size: 3.6rem;
+      margin: 0 0 0.3rem;
+      color: #111;
+    }
+    .subtitle {
+      font-size: 1rem;
+      font-weight: 400;
+      color: #888;
+      margin-bottom: 3rem;
+      border-left: 3px solid #ccc;
+      padding-left: 1rem;
+      font-family: 'JetBrains Mono', monospace;
+    }
+    h2 {
+      font-size: 2.2rem;
+      margin: 4.5rem 0 1.8rem;
+      padding-bottom: 0.5rem;
+      border-bottom: 3px solid;
+      display: inline-block;
+    }
+    h2.grp { color: #c1121f; border-color: #c1121f; }
+    h2.sft { color: #111; border-color: #111; }
+    h2.both { color: #7a2e3b; border-color: #7a2e3b; }
+
+    h3 {
+      font-size: 1.5rem;
+      margin: 3rem 0 1.2rem;
+      font-weight: 700;
+    }
+    h3.grp  { color: #c1121f; }
+    h3.sft  { color: #222; }
+    h3.gold { color: #b8860b; }
+    h3.purp { color: #5b2c6f; }
+
+    /* ── body text ── */
+    p { margin: 0 0 1.2rem; }
+    strong { font-weight: 700; }
+    .red   { color: #c1121f; }
+    .black { color: #111; }
+    .gray  { color: #666; }
+    .gold  { color: #b8860b; }
+    .purple{ color: #5b2c6f; }
+    .blue  { color: #1a5c7a; }
+    .green { color: #2a5c3a; }
+
+    /* ── callout / blockquote ── */
+    .callout {
+      margin: 2rem 0;
+      padding: 1.5rem 2rem;
+      border-left: 5px solid;
+      border-radius: 0 6px 6px 0;
+      background: #fff;
+    }
+    .callout.red   { border-color: #c1121f; background: #fef2f2; }
+    .callout.black { border-color: #222; background: #f5f5f5; }
+    .callout.gold  { border-color: #b8860b; background: #fefcf5; }
+    .callout.purp  { border-color: #5b2c6f; background: #f8f4fc; }
+
+    .callout p:last-child { margin-bottom: 0; }
+
+    /* ── math display ── */
+    .math-block {
+      margin: 1.8rem 0;
+      padding: 1.2rem 1.5rem;
+      background: #f5f4f2;
+      border-radius: 6px;
+      overflow-x: auto;
+    }
+    .math-block .katex-display { margin: 0.4em 0; }
+
+    /* ── code inline ── */
+    code {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.9em;
+      background: #eee;
+      padding: 0.15em 0.4em;
+      border-radius: 3px;
+    }
+
+    /* ── lists ── */
+    ul, ol { margin: 0 0 1.2rem; padding-left: 1.8rem; }
+    li { margin-bottom: 0.4rem; }
+
+    /* ── separator ── */
+    hr {
+      margin: 3rem 0;
+      border: none;
+      border-top: 1px solid #ddd;
+    }
+
+    /* ── key insight banner ── */
+    .insight {
+      margin: 2.5rem 0;
+      padding: 1.8rem 2rem;
+      background: #111;
+      color: #f0f0f0;
+      border-radius: 8px;
+      font-size: 1.05rem;
+    }
+    .insight .red { color: #ff6b6b; }
+    .insight .gold { color: #ffd166; }
+    .insight strong { color: #fff; }
+
+    /* ── side-by-side ── */
+    .side-by-side {
+      display: flex;
+      gap: 2rem;
+      margin: 2rem 0;
+    }
+    .side-by-side > div {
+      flex: 1;
+      padding: 1.2rem;
+      border-radius: 6px;
+    }
+    .side-by-side .left  { background: #f5f5f5; border-left: 4px solid #222; }
+    .side-by-side .right { background: #fef2f2; border-left: 4px solid #c1121f; }
+    .side-by-side h4 { font-family: 'JetBrains Mono', monospace; font-weight: 800; font-size: 1rem; margin: 0 0 0.6rem; }
+    .side-by-side .left h4  { color: #222; }
+    .side-by-side .right h4 { color: #c1121f; }
+
+    /* ── responsive ── */
+    @media (max-width: 640px) {
+      .container { padding: 1.5rem 1rem 4rem; }
+      h1 { font-size: 2.4rem; }
+      h2 { font-size: 1.7rem; }
+      .side-by-side { flex-direction: column; gap: 1rem; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="container">
+
+  <!-- ───── TITLE ───── -->
+  <h1>SFT <span style="color:#c1121f;">∵</span> GRPO</h1>
+  <div class="subtitle">
+    The actual mathematical difference — gradient geometry, probability distributions,<br>
+    and what each loss does to your model's weights.
+  </div>
+
+  <!-- ───── PREAMBLE ───── -->
+  <p>
+    You already know the high-level story: <span class="red"><strong>GRPO</strong></span> uses a reward verifier
+    and group-relative advantage, <strong>SFT</strong> matches a fixed target sequence.
+    You want the <em>mechanical</em> difference — what changes in the loss, in the gradient,
+    in the weight update, in the probability distribution the model is walking toward.
+  </p>
+  <p>
+    Here it is, from four different mathematical perspectives, no fluff.
+  </p>
+
+  <hr>
+
+  <!-- ════════════════════════════════════════════ -->
+  <!--        1. LOSS FUNCTION MECHANICS           -->
+  <!-- ════════════════════════════════════════════ -->
+
+  <h2 class="both">1. Loss function mechanics</h2>
+
+  <h3 class="sft">SFT — cross-entropy against a fixed external target</h3>
+
+  <div class="math-block">
+    \[
+    \mathcal{L}_{\text{SFT}} = -\sum_{t}\; \log \pi_\theta(y_t^* \mid x, y_{\lt t}^*)
+    \]
+  </div>
+
+  <p>
+    Every gradient step says <em>"push probability mass toward this exact token, at this exact position, because the label says so."</em>
+    The target sequence \(y^*\) is <strong>exogenous</strong> — it came from a human or a stronger model. The current policy's
+    opinion about whether that token was likely, hard, or even the best choice <strong>never enters the loss</strong>.
+  </p>
+  <p>
+    It's the same MLE objective you'd use for any classification problem, just autoregressive.
+  </p>
+
+  <h3 class="grp">GRPO — group-relative policy gradient + KL regularization</h3>
+
+  <div class="math-block">
+    \[
+    \mathcal{L}_{\text{GRPO}} \propto -\frac{1}{G}\sum_{i=1}^{G}\sum_{t}
+    \min\!\bigl(r_t(\theta)\,A_i,\; \text{clip}(r_t(\theta),\,1-\varepsilon,\,1+\varepsilon)\,A_i\bigr)
+    \;-\; \beta\cdot\text{KL}(\pi_\theta \parallel \pi_{\text{ref}})
+    \]
+  </div>
+
+  <p>
+    where \(r_t(\theta) = \frac{\pi_\theta(y_t \mid x, y_{\lt t})}{\pi_{\text{ref}}(y_t \mid x, y_{\lt t})}\)
+    and \(A_i = \dfrac{R_i - \text{mean}(R_{\text{group}})}{\text{std}(R_{\text{group}})}\).
+  </p>
+
+  <p>
+    The critical term is <span class="red"><strong>\(A_i\)</strong></span>.
+    The sign of the gradient for every token in completion \(i\) depends on whether <em>that completion</em>,
+    <strong>sampled from the model itself</strong>, scored above or below the average of other completions
+    the model also just generated for the <em>same prompt</em>.
+  </p>
+
+  <div class="insight">
+    <strong><span class="red">Crux</span>:</strong> SFT's gradient direction is <strong>given</strong>.
+    GRPO's gradient direction is <strong>computed</strong>, relative to the model's own current behavior
+    on that exact prompt. There is no external target sequence at all.
+  </div>
+
+  <hr>
+
+  <!-- ════════════════════════════════════════════ -->
+  <!--     2. LINEAR ALGEBRA — THE SAME RANK-1    -->
+  <!--         UPDATE, DIFFERENT COEFFICIENT       -->
+  <!-- ════════════════════════════════════════════ -->
+
+  <h2 class="both">2. Linear algebra</h2>
+  <h3 class="purp">Same rank-1 outer product, completely different coefficient</h3>
+
+  <p>
+    Any gradient step on a weight matrix \(W\) — say the unembedding matrix, easiest to see —
+    comes from backprop as an <strong>outer product</strong>:
+  </p>
+
+  <div class="math-block">
+    \[
+    \Delta W = -\eta \cdot \sum_t \bigl( \mathbf{error}_t \otimes \mathbf{h}_t \bigr)
+    \]
+  </div>
+
+  <p>
+    where \(\mathbf{h}_t\) is the hidden state at position \(t\) and \(\mathbf{error}_t\) is the
+    backprop signal flowing out of the softmax at that position. This structural fact —
+    <strong>gradients are sums of rank-1 outer products</strong> of "upstream activation" and
+    "downstream error" — is true for <span class="black"><strong>SFT</strong></span>
+    and <span class="red"><strong>GRPO</strong></span> alike.
+  </p>
+
+  <p>
+    There is <strong>no difference</strong> in the <em>shape</em> of the update.
+    The entire difference lives in what \(\mathbf{error}_t\) equals.
+  </p>
+
+  <!-- side-by-side comparison -->
+  <div class="side-by-side">
+    <div class="left">
+      <h4>SFT</h4>
+      <p style="font-size:0.9rem;">
+        \(\mathbf{error}_t = \text{softmax}(\mathbf{h}_t) - \text{onehot}(y_t^*)\)<br>
+        coefficient weight = <strong>1</strong>, always.
+      </p>
+      <p style="font-size:0.85rem;color:#555;">
+        Every token in the dataset contributes exactly one fixed-sign,
+        fixed-magnitude pull: rotate the row of \(W\) corresponding to the
+        demonstrated token <em>toward</em> \(\mathbf{h}_t\), rotate every other
+        row <em>away</em>. Deterministic. The target one-hot vector is
+        <strong>external and fixed</strong> before you ever compute a gradient.
+      </p>
+    </div>
+    <div class="right">
+      <h4>GRPO</h4>
+      <p style="font-size:0.9rem;">
+        \(\mathbf{error}_t = A_i \cdot \bigl(\text{softmax}(\mathbf{h}_t) - \text{onehot}(y_t)\bigr)\)<br>
+        where \(y_t\) is <em>self-generated</em>.
+      </p>
+      <p style="font-size:0.85rem;color:#555;">
+        Same outer-product structure — but now the "target" \(\text{onehot}(y_t)\)
+        is self-generated, and the coefficient <span class="red"><strong>\(A_i\)</strong></span>
+        is <strong>signed</strong>. If \(A_i \lt 0\), the update literally flips direction:
+        it rotates the row for \(y_t\) <em>away</em> from \(\mathbf{h}_t\) — the model
+        is punishing itself for producing a token it just produced.
+      </p>
+    </div>
+  </div>
+
+  <div class="callout gold">
+    <strong>In vector terms:</strong>
+    SFT's gradient is a <strong>fixed vector field pointing at externally-given targets</strong>.
+    GRPO's gradient is a <strong>signed, reweighted average over the model's own sampled directions</strong>.
+    That reweighting is the entire trick — nothing else structurally differs.
+  </div>
+
+  <hr>
+
+  <!-- ════════════════════════════════════════════ -->
+  <!--     3. PROBABILITY — TARGET DISTRIBUTIONS   -->
+  <!-- ════════════════════════════════════════════ -->
+
+  <h2 class="both">3. Probability</h2>
+  <h3 class="purp">What distribution is each one actually converging toward?</h3>
+
+  <p>
+    This is the sharper way to see <em>"why GRPO can discover things SFT can't."</em>
+  </p>
+
+  <h3 class="sft">SFT — forward KL to a fixed data distribution</h3>
+
+  <div class="math-block">
+    \[
+    \text{SFT:}\quad \arg\min_\theta \; \text{KL}\bigl(P_{\text{data}}(y \mid x) \;\|\; \pi_\theta(y \mid x)\bigr)
+    \]
+  </div>
+
+  <p>
+    Forward KL is <strong>mode-covering</strong>: if \(P_{\text{data}}\) puts a point mass
+    on one demonstrated trajectory, \(\pi_\theta\) is dragged to put mass there too,
+    full stop, with no reference to whether \(\pi_\theta\) already "believed"
+    something better was possible.
+  </p>
+
+  <h3 class="grp">GRPO — Boltzmann tilting of the model's own distribution</h3>
+
+  <p>
+    GRPO is a score-function (REINFORCE) estimator of the gradient of expected reward,
+    KL-regularized to a reference policy. The actual fixed point — the distribution
+    \(\pi^*\) that maximizes \(\mathbb{E}[R] - \beta\cdot\text{KL}(\pi\|\pi_{\text{ref}})\) —
+    has a <strong>closed form</strong>, well known from control-as-inference:
+  </p>
+
+  <div class="math-block">
+    \[
+    \pi^*(y \mid x) \;\propto\; \pi_{\text{ref}}(y \mid x) \;\cdot\; \exp\!\bigl(R(y) / \beta\bigr)
+    \]
+  </div>
+
+  <p>
+    That's a <strong>Boltzmann / Gibbs tilting</strong> of the reference distribution
+    by reward — not a point mass on any specific demonstrated sequence. GRPO is trying to
+    sculpt the model's own distribution so that probability mass gets exponentially
+    reallocated toward whatever the model already assigns even slightly-higher-than-average
+    reward to. It's <strong>mode-seeking w.r.t. reward</strong>, not mode-covering w.r.t.
+    some external trace.
+  </p>
+
+  <div class="insight">
+    <strong>This is the deep reason SFT can't produce emergent behavior</strong>
+    (long backtracking chains, adaptive reasoning length) and GRPO can:
+    <span class="gold">SFT's target distribution is fixed in advance</span> by a
+    human/model transcript.<br>
+    <span class="red">GRPO's target distribution is defined self-referentially</span>
+    in terms of the model's own reward-weighted output distribution. Whatever weird
+    trajectory the model stumbles into that scores well gets exponentially amplified —
+    there's no requirement that trajectory ever existed in any dataset.
+  </div>
+
+  <hr>
+
+  <!-- ════════════════════════════════════════════ -->
+  <!--  4. WHY SUBTRACTING THE GROUP MEAN IS FREE  -->
+  <!-- ════════════════════════════════════════════ -->
+
+  <h2 class="both">4. Why group-relative normalization isn't a hack</h2>
+  <h3 class="purp">It's exploiting a zero-mean identity</h3>
+
+  <p>
+    The advantage baseline — subtracting the group mean — looks arbitrary but it's
+    actually <strong>free</strong>. The score function has a zero-mean property under
+    its own distribution:
+  </p>
+
+  <div class="math-block">
+    \[
+    \mathbb{E}_{y \sim \pi_\theta}\bigl[\nabla_\theta \log \pi_\theta(y)\bigr]
+    = \nabla_\theta \sum_y \pi_\theta(y)
+    = \nabla_\theta (1)
+    = 0
+    \]
+  </div>
+
+  <p>
+    So for any constant \(b(x)\) that doesn't depend on \(y\):
+  </p>
+
+  <div class="math-block">
+    \[
+    \mathbb{E}_y\bigl[b \cdot \nabla_\theta \log \pi_\theta(y)\bigr] = b \cdot 0 = 0
+    \]
+  </div>
+
+  <p>
+    Meaning replacing \(R(y)\) with \(R(y) - b\) in the policy gradient
+    <strong>changes nothing in expectation</strong> — same true gradient direction —
+    but changes the variance a lot. GRPO subtracting the group mean and dividing by
+    group std is just picking the \(b\) that minimizes estimator variance,
+    <strong>for free, with zero bias cost</strong>.
+  </p>
+
+  <div class="callout black">
+    <p>
+      There's no equivalent concept in SFT, because SFT was never estimating an
+      expectation over a stochastic policy in the first place — it's plain MLE over
+      fixed data. There's no "variance of the gradient estimator" to reduce.
+    </p>
+  </div>
+
+  <hr>
+
+  <!-- ════════════════════════════════════════════ -->
+  <!--  5. WHY GRPO WORKS BETTER FOR REASONING    -->
+  <!-- ════════════════════════════════════════════ -->
+
+  <h2 class="both">5. Why GRPO "works better" for reasoning</h2>
+
+  <p>
+    It's not that one is a strictly stronger algorithm. They're optimizing
+    <strong>fundamentally different quantities</strong>:
+  </p>
+
+  <div class="side-by-side">
+    <div class="left">
+      <h4>SFT</h4>
+      <p style="font-size:0.9rem;">
+        Minimizes <span class="black"><strong>distance to a reference trajectory</strong></span>.
+      </p>
+    </div>
+    <div class="right">
+      <h4>GRPO</h4>
+      <p style="font-size:0.9rem;">
+        Maximizes <span class="red"><strong>probability of self-generated trajectories</strong></span>
+        that a verifier confirms are correct, relative to the model's own alternatives.
+      </p>
+    </div>
+  </div>
+
+  <p>
+    For tasks where <strong>being correct at the end</strong> is what matters
+    and there are many valid roads there, optimizing the second objective directly
+    is just <em>the right objective</em> — SFT is a proxy for it (mimic something
+    that was presumably correct) and GRPO is the real thing (was it actually correct,
+    whatever path you took).
+  </p>
+
+  <p>
+    That's the whole reason DeepSeek-R1-Zero could get emergent long CoT /
+    self-correction with basically no SFT at all — those behaviors were never
+    demonstrated, they were <em>discovered</em> by the model because they correlated
+    with higher reward across its own sampled rollouts, and GRPO's loss has a
+    mechanism to reinforce exactly that correlation.
+  </p>
+
+  <div class="insight">
+    <span class="red">SFT's loss structurally cannot reinforce "a behavior that correlates with success"</span>
+    — it can only reinforce "matches this string."
+  </div>
+
+  <hr>
+
+  <!-- ════════════════════════════════════════════ -->
+  <!--  6. ONE-LINE SUMMARY                       -->
+  <!-- ════════════════════════════════════════════ -->
+
+  <h2 class="both">6. One-line summary that ties it together</h2>
+
+  <div class="side-by-side">
+    <div class="left">
+      <h4>SFT</h4>
+      <p style="font-size:0.85rem;">
+        Walks the model's parameters toward a <strong>fixed, externally-specified
+        point mass</strong>, via unbiased-but-inflexible cross-entropy gradients.
+      </p>
+    </div>
+    <div class="right">
+      <h4>GRPO</h4>
+      <p style="font-size:0.85rem;">
+        Walks the model's parameters toward its own <strong>reward-exponentially-tilted
+        distribution</strong>, via a high-variance-but-unbiased Monte Carlo estimator
+        of the true policy gradient, using the fact that \(\nabla\log\pi\) integrates
+        to zero under its own measure to de-noise that estimator for free.
+      </p>
+    </div>
+  </div>
+
+  <p style="text-align:center; font-size:0.85rem; color:#888; margin-top:3rem;">
+    Same outer-product machinery. Completely different target.
+  </p>
+
+</div>
+
+<script>
+  document.addEventListener("DOMContentLoaded", function() {
+    renderMathInElement(document.body, {
+      delimiters: [
+        {left: '\\[', right: '\\]', display: true},
+        {left: '\\(', right: '\\)', display: false}
+      ],
+      throwOnError: false
+    });
+  });
+</script>
+
+</body>
+</html>

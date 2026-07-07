@@ -1,0 +1,2376 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>FinalSLM — Dimension Flow &amp; Architecture</title>
+
+  <!-- KaTeX for beautiful math -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"
+          onload="renderMathInElement(document.body, {delimiters:[{left:'\\[',right:'\\]',display:true},{left:'\\(',right:'\\)',display:false}]});"></script>
+
+  <style>
+    /* ── Reset & base ── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; font-size: 16px; }
+
+    body {
+      background: #ffffff;
+      color: #1a1a1a;
+      font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Source Code Pro', 'Menlo', 'Consolas', monospace;
+      line-height: 1.7;
+      -webkit-font-smoothing: antialiased;
+      text-rendering: optimizeLegibility;
+    }
+
+    /* ── Container ── */
+    .container {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 2rem 1.5rem 6rem;
+    }
+
+    /* ── Typography — bigger, heavier, more spacing ── */
+    h1, h2, h3, h4 {
+      font-family: inherit;
+      font-weight: 900;
+      line-height: 1.2;
+      color: #1a1a1a;
+      letter-spacing: 0;
+    }
+
+    h1 {
+      font-size: 3.2rem;
+      letter-spacing: 0;
+      margin: 0 0 0.25rem;
+    }
+    h2 {
+      font-size: 2.4rem;
+      font-weight: 900;
+      margin: 5rem 0 2rem;
+      padding-bottom: 0.7rem;
+      border-bottom: 4px solid #e63946;
+      display: inline-block;
+    }
+    h3 {
+      font-size: 1.8rem;
+      font-weight: 900;
+      margin: 3.5rem 0 1.2rem;
+      color: #e63946;
+    }
+    h4 {
+      font-size: 1.3rem;
+      margin: 2.5rem 0 1rem;
+      font-weight: 800;
+      color: #1a1a1a;
+    }
+
+    p  { margin: 1rem 0; }
+    ul, ol { margin: 1rem 0 1rem 2rem; }
+    li { margin: 0.5rem 0; }
+
+    a {
+      color: #e63946;
+      text-decoration: none;
+      border-bottom: 1px solid #e6394644;
+    }
+    a:hover { border-bottom-color: #e63946; }
+
+    strong { color: #e63946; font-weight: 700; }
+    .dim   { color: #e63946; font-weight: 700; }
+    .note  { color: #666; font-size: 0.9rem; }
+    .hl    { background: #fff0f0; padding: 0.1rem 0.3rem; border-radius: 2px; }
+
+    /* ── Hero ── */
+    .hero {
+      text-align: center;
+      padding: 3rem 0 2rem;
+      border-bottom: 1px solid #e0e0e0;
+      margin-bottom: 2.5rem;
+    }
+    .hero .subtitle {
+      font-size: 0.9rem;
+      color: #666;
+      margin-top: 0.3rem;
+    }
+    .hero .stats {
+      display: flex;
+      justify-content: center;
+      gap: 2rem;
+      margin-top: 1.2rem;
+      font-size: 0.85rem;
+    }
+    .hero .stats span {
+      background: #f5f5f5;
+      padding: 0.3rem 0.8rem;
+      border-radius: 4px;
+    }
+
+    /* ── Specs table ── */
+    .specs {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 0.5rem 1.5rem;
+      margin: 1.2rem 0;
+      font-size: 0.9rem;
+    }
+    .specs .item {
+      display: flex;
+      justify-content: space-between;
+      padding: 0.3rem 0;
+      border-bottom: 1px dotted #ddd;
+    }
+    .specs .item .label { color: #666; }
+    .specs .item .value { font-weight: 700; }
+
+    /* ── Code blocks ── */
+    pre {
+      background: #f7f7f7;
+      border: 1px solid #e5e5e5;
+      border-radius: 6px;
+      padding: 1rem 1.2rem;
+      overflow-x: auto;
+      font-size: 0.82rem;
+      line-height: 1.5;
+      margin: 1rem 0;
+    }
+    pre .red { color: #e63946; }
+    pre .grn { color: #2d6a4f; }
+    pre .blu { color: #1d3557; }
+    pre .gry { color: #888; }
+
+    code {
+      font-family: inherit;
+      font-size: 0.88em;
+      background: #f0f0f0;
+      padding: 0.1rem 0.3rem;
+      border-radius: 3px;
+    }
+    pre code { background: none; padding: 0; }
+
+    /* ── Boxes ── */
+    .callout {
+      border-left: 4px solid #e63946;
+      background: #fafafa;
+      padding: 1rem 1.2rem;
+      margin: 1.2rem 0;
+      border-radius: 0 6px 6px 0;
+    }
+    .callout .title {
+      font-weight: 700;
+      color: #e63946;
+      margin-bottom: 0.3rem;
+    }
+
+    .plain-card {
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      padding: 1rem 1.2rem;
+      margin: 1rem 0;
+      background: #fff;
+    }
+    .plain-card .label {
+      font-weight: 800;
+      font-size: 0.78rem;
+      text-transform: uppercase;
+      color: #777;
+      letter-spacing: 0.08em;
+      margin-bottom: 0.45rem;
+    }
+    .build-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 1rem;
+      margin: 1.2rem 0;
+    }
+    .build-card {
+      border: 1px solid #e0e0e0;
+      border-radius: 8px;
+      background: #fff;
+      padding: 1rem 1.1rem;
+    }
+    .build-card h4 {
+      margin: 0 0 0.5rem;
+      font-size: 1rem;
+      color: #e63946;
+    }
+    .build-card p {
+      margin: 0.45rem 0;
+      font-size: 0.9rem;
+    }
+    .build-card code {
+      word-break: break-word;
+    }
+
+    .flow-step {
+      border: 1px solid #e0e0e0;
+      border-radius: 8px;
+      padding: 1.8rem 2rem;
+      margin: 2rem 0;
+      background: #fcfcfc;
+    }
+    .flow-step .step-header {
+      display: flex;
+      align-items: center;
+      gap: 0.8rem;
+      margin-bottom: 0.6rem;
+    }
+    .flow-step .step-num {
+      background: #e63946;
+      color: #fff;
+      font-weight: 700;
+      font-size: 0.8rem;
+      width: 1.8rem;
+      height: 1.8rem;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    .flow-step .step-name {
+      font-weight: 700;
+      font-size: 1.05rem;
+    }
+    .flow-step .shape-row {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+      font-size: 0.9rem;
+      margin: 0.4rem 0;
+    }
+    .flow-step .shape-row .arrow { color: #e63946; font-weight: 700; }
+    .flow-step .shape-row .shape {
+      background: #fff0f0;
+      padding: 0.15rem 0.5rem;
+      border-radius: 4px;
+      font-weight: 700;
+    }
+    .flow-step .desc { color: #444; font-size: 0.92rem; }
+
+    /* ── SVG containers ── */
+    .svg-wrap {
+      margin: 1.5rem 0;
+      text-align: center;
+    }
+    .svg-wrap svg {
+      max-width: 100%;
+      height: auto;
+      border: 1px solid #eee;
+      border-radius: 8px;
+      background: #fefefe;
+    }
+    .svg-caption {
+      font-size: 0.8rem;
+      color: #666;
+      margin-top: 0.3rem;
+      text-align: center;
+    }
+
+    /* ── Dimension trace table ── */
+    .trace-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 1.2rem 0;
+      font-size: 0.82rem;
+    }
+    .trace-table th {
+      background: #1a1a1a;
+      color: #fff;
+      padding: 0.5rem 0.8rem;
+      text-align: left;
+      font-weight: 700;
+    }
+    .trace-table td {
+      padding: 0.5rem 0.8rem;
+      border-bottom: 1px solid #e0e0e0;
+      vertical-align: top;
+    }
+    .trace-table tr:nth-child(even) td { background: #fafafa; }
+    .trace-table td:first-child { font-weight: 700; color: #e63946; }
+
+    /* ── Footer ── */
+    footer {
+      margin-top: 4rem;
+      padding-top: 1.5rem;
+      border-top: 1px solid #e0e0e0;
+      text-align: center;
+      font-size: 0.8rem;
+      color: #999;
+    }
+
+    /* ── Responsive ── */
+    @media (max-width: 680px) {
+      .container { padding: 1rem 0.8rem 3rem; }
+      h1 { font-size: 1.6rem; }
+      h2 { font-size: 1.2rem; }
+      .hero .stats { flex-direction: column; gap: 0.5rem; align-items: center; }
+      .specs { grid-template-columns: 1fr; }
+      .build-grid { grid-template-columns: 1fr; }
+      .flow-step { padding: 0.8rem 1rem; }
+    }
+
+    /* ── KaTeX tweaks ── */
+    .katex { font-size: 1.05em !important; }
+    .katex .mathnormal { font-style: normal !important; }
+  </style>
+</head>
+<body>
+
+<div class="container">
+
+  <!-- ═══════════════════════ HERO ═══════════════════════ -->
+  <div class="hero">
+    <h1>FinalSLM · From Scratch</h1>
+    <p class="subtitle">
+      A simple but deep guide to building, training, and generating with a 363M-parameter decoder-only transformer
+    </p>
+    <div class="stats">
+      <span><strong>d_model</strong> = 960</span>
+      <span><strong>Layers</strong> = 30</span>
+      <span><strong>Heads</strong> = 15</span>
+      <span><strong>Head dim</strong> = 64</span>
+      <span><strong>Vocab</strong> = 32,768</span>
+      <span><strong>Seq len</strong> = 2,048</span>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════ THE BIG PICTURE ═══════════════════════ -->
+  <h2>The Big Picture</h2>
+
+  <p>
+    This model follows the <strong>Llama-style decoder-only</strong> architecture.
+    That means it learns one job extremely well: given the tokens so far,
+    predict the next token. Everything else in the system exists to make that
+    job possible at scale: the tokenizer turns text into IDs, the data pipeline
+    creates next-token examples, the transformer converts IDs into contextual
+    vectors, the loss tells us how wrong the model was, and the optimizer nudges
+    the weights so tomorrow's predictions are better than today's.
+  </p>
+
+  <p>
+    The easiest way to understand an SLM is not to memorize the code first.
+    Follow the movement of information. Text becomes token IDs. Token IDs become
+    vectors. Vectors move through 30 decoder layers. The final vector at each
+    position becomes 32,768 scores, one score for every token the model could
+    say next. Training repeatedly asks: <em>did the correct next token receive a
+    high score?</em>
+  </p>
+
+  <p>
+    There are <strong>three fundamental dimensions</strong> that matter:
+  </p>
+
+  <ul>
+    <li><strong>B</strong> — batch: how many independent sequences we process at once</li>
+    <li><strong>T</strong> — time/position: where we are in the sequence (tokens in order)</li>
+    <li><strong>d_model</strong> = 960 — the hidden / residual-stream width: <em>what each token "knows"</em></li>
+  </ul>
+
+  <p>
+    Everything we do — attention, MLP, normalization — transforms the <em>information inside each token's 960-dim vector</em>
+    while keeping the overall shape <code>(B, T, 960)</code> stable. The only two shape changes happen
+    <strong>at the start</strong> (token IDs → vectors) and <strong>at the end</strong> (vectors → vocabulary scores).
+  </p>
+
+  <div class="callout">
+    <div class="title">⟹ The Central Insight</div>
+    <p>
+      The residual stream <code>(B, T, 960)</code> is a <strong>highway</strong> that stays the same shape
+      through all 30 layers. Each layer reads from it, transforms the information, and writes back.
+      The shape never contracts or expands — only the <em>content</em> of the 960 features evolves.
+    </p>
+  </div>
+
+  <div class="callout">
+    <div class="title">⟹ What "from scratch" means in this repo</div>
+    <p>
+      We are not writing CUDA kernels or reimplementing matrix multiplication.
+      We are building the language model ourselves using PyTorch primitives:
+      embedding lookup, linear layers, matrix multiply, softmax, cross-entropy,
+      AdamW, and tensor reshaping. That is the right level for learning how an
+      SLM works. The architecture, data packing, loss, training loop, saving,
+      loading, and generation code are ours.
+    </p>
+  </div>
+
+  <!-- ═══════════════════════ PIPELINE SVG ═══════════════════════ -->
+  <h2>The Full Pipeline</h2>
+  <p>
+    One diagram to see everything at once. Follow the flow from token IDs to the final prediction.
+  </p>
+
+  <div class="svg-wrap">
+    <svg viewBox="0 0 820 1550" xmlns="http://www.w3.org/2000/svg" style="font-family:'JetBrains Mono','Fira Code',monospace;">
+      <defs>
+        <marker id="arrow" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto">
+          <polygon points="0 0, 10 3.5, 0 7" fill="#1a1a1a"/>
+        </marker>
+        <marker id="arrow-red" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto">
+          <polygon points="0 0, 10 3.5, 0 7" fill="#e63946"/>
+        </marker>
+        <linearGradient id="boxGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#fff"/>
+          <stop offset="100%" stop-color="#f8f8f8"/>
+        </linearGradient>
+        <linearGradient id="layerGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#fcfcfc"/>
+          <stop offset="100%" stop-color="#f0f0f0"/>
+        </linearGradient>
+      </defs>
+
+      <!-- Input -->
+      <rect x="250" y="20" width="320" height="60" rx="6" fill="url(#boxGrad)" stroke="#1a1a1a" stroke-width="2"/>
+      <text x="410" y="46" text-anchor="middle" font-weight="700" font-size="14" fill="#1a1a1a">INPUT TOKEN IDS</text>
+      <text x="410" y="66" text-anchor="middle" font-size="13" fill="#e63946">(B, T)</text>
+      <text x="410" y="78" text-anchor="middle" font-size="10" fill="#888">e.g. [464, 3797, 6471]</text>
+
+      <!-- Arrow -->
+      <line x1="410" y1="80" x2="410" y2="115" stroke="#1a1a1a" stroke-width="2" marker-end="url(#arrow)"/>
+
+      <!-- Embedding -->
+      <rect x="250" y="118" width="320" height="72" rx="6" fill="url(#boxGrad)" stroke="#e63946" stroke-width="2"/>
+      <text x="410" y="144" text-anchor="middle" font-weight="700" font-size="14" fill="#e63946">TOKEN EMBEDDING</text>
+      <text x="410" y="164" text-anchor="middle" font-size="12" fill="#1a1a1a">vocab_size × d_model</text>
+      <text x="410" y="182" text-anchor="middle" font-size="13" fill="#e63946">(B, T) → (B, T, 960)</text>
+
+      <!-- Arrow -->
+      <line x1="410" y1="190" x2="410" y2="225" stroke="#1a1a1a" stroke-width="2" marker-end="url(#arrow)"/>
+
+      <!-- Label: Residual Stream -->
+      <rect x="80" y="212" width="130" height="24" rx="3" fill="#fff0f0" stroke="#e63946" stroke-width="1"/>
+      <text x="145" y="229" text-anchor="middle" font-size="10" fill="#e63946">RESIDUAL STREAM</text>
+      <line x1="210" y1="224" x2="250" y2="224" stroke="#e63946" stroke-width="1" stroke-dasharray="4,2"/>
+
+      <!-- Layer 1 -->
+      <rect x="200" y="228" width="420" height="70" rx="6" fill="url(#layerGrad)" stroke="#1a1a1a" stroke-width="1.5"/>
+      <text x="410" y="250" text-anchor="middle" font-weight="700" font-size="13" fill="#1a1a1a">DECODER LAYER 1</text>
+      <text x="410" y="268" text-anchor="middle" font-size="11" fill="#555">RMSNorm → Multi-Head Attention → + residual</text>
+      <text x="410" y="284" text-anchor="middle" font-size="11" fill="#555">RMSNorm → SwiGLU MLP → + residual</text>
+      <text x="410" y="296" text-anchor="middle" font-size="12" fill="#e63946">(B, T, 960) — shape unchanged</text>
+
+      <!-- Arrow -->
+      <line x1="410" y1="298" x2="410" y2="325" stroke="#888" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+      <!-- Layer 2 -->
+      <rect x="200" y="328" width="420" height="60" rx="6" fill="url(#layerGrad)" stroke="#1a1a1a" stroke-width="1.5"/>
+      <text x="410" y="350" text-anchor="middle" font-weight="700" font-size="13" fill="#1a1a1a">DECODER LAYER 2</text>
+      <text x="410" y="370" text-anchor="middle" font-size="11" fill="#555">Attention + MLP with residual</text>
+      <text x="410" y="384" text-anchor="middle" font-size="12" fill="#e63946">(B, T, 960)</text>
+
+      <!-- Vertical dots -->
+      <line x1="410" y1="388" x2="410" y2="404" stroke="#ccc" stroke-width="2"/>
+      <circle cx="410" cy="412" r="3" fill="#ccc"/>
+      <circle cx="410" cy="422" r="3" fill="#ccc"/>
+      <circle cx="410" cy="432" r="3" fill="#ccc"/>
+      <line x1="410" y1="438" x2="410" y2="448" stroke="#ccc" stroke-width="2"/>
+
+      <!-- Label: 30 layers -->
+      <text x="630" y="400" text-anchor="start" font-size="11" fill="#888" font-style="italic">× 30 layers total</text>
+
+      <!-- Layer 30 -->
+      <rect x="200" y="452" width="420" height="60" rx="6" fill="url(#layerGrad)" stroke="#1a1a1a" stroke-width="1.5"/>
+      <text x="410" y="474" text-anchor="middle" font-weight="700" font-size="13" fill="#1a1a1a">DECODER LAYER 30</text>
+      <text x="410" y="494" text-anchor="middle" font-size="11" fill="#555">Attention + MLP with residual</text>
+      <text x="410" y="508" text-anchor="middle" font-size="12" fill="#e63946">(B, T, 960)</text>
+
+      <!-- Arrow -->
+      <line x1="410" y1="512" x2="410" y2="547" stroke="#1a1a1a" stroke-width="2" marker-end="url(#arrow)"/>
+
+      <!-- Final Norm -->
+      <rect x="250" y="550" width="320" height="55" rx="6" fill="url(#boxGrad)" stroke="#1a1a1a" stroke-width="2"/>
+      <text x="410" y="574" text-anchor="middle" font-weight="700" font-size="13" fill="#1a1a1a">FINAL RMSNorm</text>
+      <text x="410" y="596" text-anchor="middle" font-size="12" fill="#e63946">(B, T, 960) → (B, T, 960)</text>
+
+      <!-- Arrow -->
+      <line x1="410" y1="605" x2="410" y2="640" stroke="#1a1a1a" stroke-width="2" marker-end="url(#arrow)"/>
+
+      <!-- LM Head -->
+      <rect x="200" y="643" width="420" height="70" rx="6" fill="url(#boxGrad)" stroke="#e63946" stroke-width="2"/>
+      <text x="410" y="667" text-anchor="middle" font-weight="700" font-size="14" fill="#e63946">LM HEAD (tied with embedding)</text>
+      <text x="390" y="685" text-anchor="middle" font-size="11" fill="#1a1a1a">x @ embed.weight<tspan font-size="9" dy="-4" fill="#e63946">T</tspan></text>
+      <text x="410" y="705" text-anchor="middle" font-size="13" fill="#e63946">(B, T, 960) → (B, T, 32768)</text>
+
+      <!-- Arrow -->
+      <line x1="410" y1="713" x2="410" y2="748" stroke="#1a1a1a" stroke-width="2" marker-end="url(#arrow)"/>
+
+      <!-- Logits -->
+      <rect x="200" y="751" width="420" height="70" rx="6" fill="url(#boxGrad)" stroke="#1a1a1a" stroke-width="2"/>
+      <text x="410" y="775" text-anchor="middle" font-weight="700" font-size="14" fill="#1a1a1a">LOGITS</text>
+      <text x="410" y="795" text-anchor="middle" font-size="11" fill="#555">Raw scores for every token in vocabulary</text>
+      <text x="410" y="813" text-anchor="middle" font-size="13" fill="#e63946">(B, T, 32768) — scores per position per vocab</text>
+
+      <!-- Arrow -->
+      <line x1="410" y1="821" x2="410" y2="856" stroke="#1a1a1a" stroke-width="2" marker-end="url(#arrow)"/>
+
+      <!-- Prediction row -->
+      <rect x="150" y="860" width="520" height="70" rx="6" fill="#fff0f0" stroke="#e63946" stroke-width="2"/>
+      <text x="410" y="884" text-anchor="middle" font-weight="700" font-size="13" fill="#e63946">PREDICTION — NEXT TOKEN</text>
+      <text x="410" y="904" text-anchor="middle" font-size="11" fill="#1a1a1a">softmax / top-k / temperature sampling</text>
+      <text x="410" y="922" text-anchor="middle" font-size="12" fill="#1a1a1a">logits[-1] → probabilities → sample</text>
+
+      <!-- Side annotation -->
+      <line x1="670" y1="795" x2="750" y2="795" stroke="#e63946" stroke-width="1" stroke-dasharray="4,2"/>
+      <text x="755" y="793" font-size="11" fill="#e63946">Position-wise</text>
+      <text x="755" y="808" font-size="11" fill="#e63946">scores</text>
+
+      <line x1="670" y1="905" x2="740" y2="905" stroke="#e63946" stroke-width="1" stroke-dasharray="4,2"/>
+      <text x="745" y="903" font-size="11" fill="#e63946">Last position</text>
+      <text x="745" y="918" font-size="11" fill="#e63946">only during gen</text>
+    </svg>
+    <div class="svg-caption">Figure 1: Complete pipeline — every operation preserves (B, T, 960) except the bookends.</div>
+  </div>
+
+
+  <!-- ═══════════════════════ RUNNING EXAMPLE ═══════════════════════ -->
+  <h2>The Running Example</h2>
+  <p>
+    Throughout this page, we trace the sentence <strong>"The cat sat"</strong> through the model.
+    It is a tiny example, but it lets us dry-run the same operations that happen
+    for a real 2,048-token batch during training.
+  </p>
+
+  <div class="specs">
+    <div class="item"><span class="label">Token IDs</span><span class="value">[464, 3797, 6471]</span></div>
+    <div class="item"><span class="label">Batch size (B)</span><span class="value">1</span></div>
+    <div class="item"><span class="label">Seq length (T)</span><span class="value">3</span></div>
+    <div class="item"><span class="label">Hidden dim (d_model)</span><span class="value">960</span></div>
+    <div class="item"><span class="label">Number of heads</span><span class="value">15</span></div>
+    <div class="item"><span class="label">Head dimension</span><span class="value">64</span></div>
+  </div>
+
+  <div class="plain-card">
+    <div class="label">Dry Run</div>
+    <p>
+      With B=1 and T=3, the model sees three token IDs. After embedding, the
+      tensor is <code>(1, 3, 960)</code>: one sequence, three positions, and 960
+      learned numbers per position. During training, the labels are shifted by
+      one token: "The" tries to predict "cat", "cat" tries to predict "sat",
+      and "sat" tries to predict the next token after the prompt.
+    </p>
+  </div>
+
+
+  <!-- ═══════════════════════ BUILD MAP ═══════════════════════ -->
+  <h2>From-Scratch Build Map</h2>
+
+  <p>
+    If you wanted to build this SLM from a blank folder, this is the order.
+    Each piece solves one concrete problem. Build them in this order because
+    every later stage depends on the earlier one.
+  </p>
+
+  <div class="build-grid">
+    <div class="build-card">
+      <h4>1. Tokenizer</h4>
+      <p><strong>Problem:</strong> neural nets cannot read raw strings.</p>
+      <p><strong>Solution:</strong> train a 32,768-token byte-level BPE vocabulary in <code>tokenizer/train_tokenizer.py</code>.</p>
+      <p><strong>Output:</strong> text like "The cat sat" becomes IDs like <code>[464, 3797, 6471]</code>.</p>
+    </div>
+
+    <div class="build-card">
+      <h4>2. Data Stream</h4>
+      <p><strong>Problem:</strong> pretraining data is too large to load into memory.</p>
+      <p><strong>Solution:</strong> stream FineWeb-edu, OpenWebMath, and StarCoderData in <code>data/prepare_data.py</code>.</p>
+      <p><strong>Output:</strong> packed blocks of 2,049 tokens so input and labels can be shifted by one.</p>
+    </div>
+
+    <div class="build-card">
+      <h4>3. Model Config</h4>
+      <p><strong>Problem:</strong> architecture choices must be explicit.</p>
+      <p><strong>Solution:</strong> define width, depth, heads, context length, and vocab size in <code>configs/model_config.py</code>.</p>
+      <p><strong>Output:</strong> a 960-wide, 30-layer, 15-head decoder-only transformer.</p>
+    </div>
+
+    <div class="build-card">
+      <h4>4. Model Code</h4>
+      <p><strong>Problem:</strong> the model needs a forward pass.</p>
+      <p><strong>Solution:</strong> implement RMSNorm, RoPE, attention, SwiGLU, decoder layers, tied LM head in <code>model/slm_model.py</code>.</p>
+      <p><strong>Output:</strong> <code>input_ids: (B,T)</code> becomes <code>logits: (B,T,32768)</code>.</p>
+    </div>
+
+    <div class="build-card">
+      <h4>5. Training Loop</h4>
+      <p><strong>Problem:</strong> random weights do not predict language.</p>
+      <p><strong>Solution:</strong> run next-token cross-entropy, backprop, gradient accumulation, clipping, and AdamW in <code>train/pretrain.py</code>.</p>
+      <p><strong>Output:</strong> weights slowly move from random guesses toward useful language predictions.</p>
+    </div>
+
+    <div class="build-card">
+      <h4>6. Evaluation</h4>
+      <p><strong>Problem:</strong> training loss alone can hide bugs.</p>
+      <p><strong>Solution:</strong> compute validation loss, perplexity, and sample generations in <code>eval/eval_loss.py</code>.</p>
+      <p><strong>Output:</strong> a basic answer to "is the model actually learning?"</p>
+    </div>
+  </div>
+
+  <div class="callout">
+    <div class="title">⟹ Why these dimensions?</div>
+    <p>
+      <code>d_model=960</code> is divisible by <code>15 heads</code>, giving
+      <code>head_dim=64</code>. That 64-dim head size is a common transformer
+      sweet spot: large enough for each head to learn a useful relation, small
+      enough to keep attention efficient. <code>intermediate_size=2560</code>
+      is <code>8/3 × d_model</code>, the common SwiGLU replacement for a
+      standard 4x MLP. <code>30 layers</code> makes the model deep enough to
+      refine representations many times while staying around 363M parameters.
+    </p>
+  </div>
+
+
+  <!-- ═══════════════════════ LAYER BY LAYER ═══════════════════════ -->
+  <h2>Layer-by-Layer Dimension Flow</h2>
+
+  <p>
+    Each section below follows the same pattern:
+    <strong>intuition → what the dimensions mean → the math → the code → the output</strong>.
+  </p>
+
+  <!-- ──── 1. TOKEN EMBEDDING ──── -->
+  <div class="flow-step">
+    <div class="step-header">
+      <span class="step-num">1</span>
+      <span class="step-name">Token Embedding</span>
+    </div>
+
+    <div class="shape-row">
+      <span class="shape">(B, T)</span>
+      <span class="arrow">→</span>
+      <span class="shape">(B, T, 960)</span>
+    </div>
+
+    <p class="desc">
+      <strong>What happened?</strong> Each token ID (an integer 0–32767) looks up a row in a
+      960-column lookup table. This is the first time we go from "token labels" to
+      "dense vectors the model can do math with."
+    </p>
+
+    <div class="callout">
+      <div class="title">⟹ What the dimensions mean</div>
+      <ul>
+        <li><strong>T</strong> — there are T positions in the sequence, each getting its own vector</li>
+        <li><strong>960</strong> — each token is now represented by 960 numbers. At init these are random;
+          during training they learn to encode meaning, syntax, and context.</li>
+      </ul>
+    </div>
+
+    <p><strong>Math:</strong> If \(E \in \mathbb{R}^{32768 \times 960}\) is the embedding matrix, then</p>
+    \[
+    x_{t} = E[\text{token}_t] \qquad \text{for each position } t = 1, \dots, T
+    \]
+
+    <p>
+      <strong>With our example:</strong> <code>token[464]</code> looks up row 464 of the embedding table.
+      That row is a 960-dimensional vector. We do this for all 3 tokens.
+    </p>
+
+    <pre>input_ids: (1, 3)
+    ↓ embed(input_ids)
+x: (1, 3, 960)   ← each of the 3 tokens now has a 960-dim vector</pre>
+  </div>
+
+
+  <!-- ──── 2. RMSNorm ──── -->
+  <div class="flow-step">
+    <div class="step-header">
+      <span class="step-num">2</span>
+      <span class="step-name">RMSNorm — Normalization</span>
+    </div>
+
+    <div class="shape-row">
+      <span class="shape">(B, T, 960)</span>
+      <span class="arrow">→</span>
+      <span class="shape">(B, T, 960)</span>
+    </div>
+
+    <p class="desc">
+      Same shape, but the 960 numbers per token are rescaled so their
+      root-mean-square is ≈1. This prevents values from growing uncontrollably
+      across 30 layers.
+    </p>
+
+    <p>
+      <strong>Why not LayerNorm?</strong> LayerNorm subtracts the mean first (centering).
+      RMSNorm skips that step — it only scales. Empirically, the centering
+      isn't needed for transformers, and RMSNorm is ~10–30% faster.
+    </p>
+
+    <p><strong>Math:</strong></p>
+    \[
+    \text{RMSNorm}(x) = \frac{x}{\sqrt{\frac{1}{d}\sum_{i=1}^{d} x_i^2 + \epsilon}} \cdot \gamma
+    \]
+
+    <p>
+      Here \(\gamma\) is a learned vector of 960 values (initialized to all 1s).
+      The model can learn to up-weight or down-weight specific features.
+    </p>
+
+    <pre># Step by step:
+x.pow(2)              → (B, T, 960)    # square each element
+.mean(dim=-1, keepdim=True) → (B, T, 1)  # average over 960 features
+.rsqrt()              → (B, T, 1)    # 1 / sqrt(...)
+x * rsqrt * gamma     → (B, T, 960)  # scale each token's vector</pre>
+
+    <div class="callout">
+      <div class="title">⟹ Why shape (B, T, 1) appears</div>
+      <p>
+        When we compute the RMS, we average over the 960 features —
+        <strong>one scale factor per token per position</strong>.
+        The <code>keepdim=True</code> keeps the dimension so broadcasting
+        works correctly when we multiply back with <code>(B, T, 960)</code>.
+      </p>
+    </div>
+  </div>
+
+
+  <!-- ──── 3. RoPE ──── -->
+  <div class="flow-step">
+    <div class="step-header">
+      <span class="step-num">3</span>
+      <span class="step-name">RoPE — Rotary Position Embedding</span>
+    </div>
+
+    <div class="shape-row">
+      <span class="shape">inv_freq: (32,)</span>
+      <span class="arrow">→</span>
+      <span class="shape">cos/sin tables: (2048, 32)</span>
+    </div>
+
+    <p class="desc">
+      <strong>What problem does this solve?</strong> Attention is <em>permutation-invariant</em>
+      — it doesn't know that "cat" comes after "The" but before "sat." We need
+      to encode position.
+    </p>
+
+    <p>
+      <strong>The insight:</strong> Instead of <em>adding</em> a position vector (like absolute
+      positional encoding), <strong>rotate</strong> the Query and Key vectors by an angle that
+      depends on the position. The dot product \(Q_p \cdot K_q\) then naturally
+      encodes the <em>relative</em> distance \((p - q)\).
+    </p>
+
+    <p><strong>How it works, step by step:</strong></p>
+    <ol>
+      <li>Take the 64-dimensions in a head and pair them up: (0,1), (2,3), (4,5), …, (62,63) → <strong>32 pairs</strong></li>
+      <li>For each pair \(i\), compute a base frequency: \( \mathrm{inv\_freq}[i] = 1 / \theta^{2i/64} \) where \(\theta = 10000\)</li>
+      <li>For position \(p\), the rotation angle for pair \(i\) is: \(\theta_{p,i} = p \cdot \mathrm{inv\_freq}[i]\)</li>
+      <li>Rotate each 2D pair by its angle: \(\begin{pmatrix} x'_{2i} \\ x'_{2i+1} \end{pmatrix} = \begin{pmatrix} \cos\theta &amp; -\sin\theta \\ \sin\theta &amp; \cos\theta \end{pmatrix} \begin{pmatrix} x_{2i} \\ x_{2i+1} \end{pmatrix}\)</li>
+    </ol>
+
+    <p><strong>What the precomputed tables look like:</strong></p>
+    <pre># Cos table — first 8 positions, first 4 dimension-pairs:
+pos 0: [1.000, 1.000, 1.000, 1.000, ...]   # at pos 0, rotation is 0°
+pos 1: [0.999, 0.999, 0.999, 0.999, ...]   # at pos 1, tiny rotation
+pos 2: [0.998, 0.997, 0.995, 0.988, ...]   # higher-frequency pairs rotate faster
+pos 3: [0.995, 0.992, 0.983, 0.956, ...]
+...
+# Sin table — same structure, just sin instead of cos</pre>
+
+    <p>
+      <strong>Key point:</strong> The first pair (dim 0,1) rotates slowly — it encodes
+      coarse position. Later pairs rotate faster — they encode fine-grained
+      position. This is exactly analogous to how positional encoding works in
+      the original Transformer (sine/cosine waves of different frequencies).
+    </p>
+
+    <pre># Before RoPE: Q and K are (B, 15, T, <span class="red">64</span>)
+# RoPE splits into even/odd indices:
+x_even = x[..., 0::2]    → (B, 15, T, <span class="red">32</span>)   # dims 0,2,4,...,62
+x_odd  = x[..., 1::2]    → (B, 15, T, <span class="red">32</span>)   # dims 1,3,5,...,63
+
+# Rotate each pair:
+rot_even = x_even * cos - x_odd * sin   → (B, 15, T, <span class="red">32</span>)
+rot_odd  = x_even * sin + x_odd * cos   → (B, 15, T, <span class="red">32</span>)
+
+# Interleave back (stack → flatten):
+stack → (B, 15, T, <span class="red">32, 2</span>) → flatten(-2) → (B, 15, T, <span class="red">64</span>)</pre>
+
+    <div class="callout">
+      <div class="title">⟹ Why only Q and K? Why not V?</div>
+      <p>
+        The <strong>attention score</strong> is \(Q \cdot K^T\). This is where position matters —
+        we need Q at position 1 (e.g., "The") to know its distance from K at
+        position 3 ("sat"). The <strong>value</strong> V carries <em>content</em> that gets
+        mixed regardless of position. Rotating V would change the content
+        representation, which isn't what we want.
+      </p>
+    </div>
+
+    <!-- RoPE SVG Visualization -->
+    <h4>Visualizing the Rotation</h4>
+    <div class="svg-wrap">
+      <svg viewBox="0 0 700 340" xmlns="http://www.w3.org/2000/svg" style="font-family:'JetBrains Mono',monospace;">
+        <defs>
+          <marker id="arr" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+            <polygon points="0 0, 8 3, 0 6" fill="#1a1a1a"/>
+          </marker>
+        </defs>
+
+        <!-- Left: original vector -->
+        <text x="30" y="25" font-weight="700" font-size="13" fill="#1a1a1a">Before RoPE</text>
+        <text x="30" y="42" font-size="11" fill="#888">Same Q at every position</text>
+
+        <!-- Axes -->
+        <line x1="50" y1="180" x2="250" y2="180" stroke="#ccc" stroke-width="1"/>
+        <line x1="150" y1="90" x2="150" y2="260" stroke="#ccc" stroke-width="1"/>
+        <text x="255" y="184" font-size="10" fill="#888">dim 2i</text>
+        <text x="154" y="85" font-size="10" fill="#888">dim 2i+1</text>
+
+        <!-- Original vector -->
+        <line x1="150" y1="180" x2="210" y2="130" stroke="#1a1a1a" stroke-width="2.5" marker-end="url(#arr)"/>
+        <circle cx="210" cy="130" r="3" fill="#1a1a1a"/>
+        <text x="215" y="125" font-size="11" fill="#1a1a1a">Q (any pos)</text>
+
+        <!-- Separator -->
+        <line x1="310" y1="20" x2="310" y2="280" stroke="#e0e0e0" stroke-width="1"/>
+
+        <!-- Right: rotated versions -->
+        <text x="340" y="25" font-weight="700" font-size="13" fill="#e63946">After RoPE</text>
+        <text x="340" y="42" font-size="11" fill="#888">Q rotated by different angles per position</text>
+
+        <!-- Axes -->
+        <line x1="360" y1="230" x2="640" y2="230" stroke="#ccc" stroke-width="1"/>
+        <line x1="500" y1="60" x2="500" y2="280" stroke="#ccc" stroke-width="1"/>
+        <text x="645" y="234" font-size="10" fill="#888">dim 2i</text>
+        <text x="504" y="55" font-size="10" fill="#888">dim 2i+1</text>
+
+        <!-- Reference original -->
+        <line x1="500" y1="230" x2="540" y2="190" stroke="#ccc" stroke-width="1" stroke-dasharray="4,3"/>
+        <text x="545" y="188" font-size="9" fill="#999">original Q</text>
+
+        <!-- Rotated: pos 0 (no rotation) -->
+        <line x1="500" y1="230" x2="540" y2="190" stroke="#e63946" stroke-width="2" marker-end="url(#arr)"/>
+        <text x="542" y="182" font-size="10" fill="#e63946">p=0</text>
+
+        <!-- Rotated: pos 1 (small rotation) -->
+        <line x1="500" y1="230" x2="555" y2="178" stroke="#d62828" stroke-width="2" marker-end="url(#arr)"/>
+        <text x="560" y="174" font-size="10" fill="#d62828">p=1</text>
+
+        <!-- Rotated: pos 3 (larger rotation) -->
+        <line x1="500" y1="230" x2="580" y2="158" stroke="#b71c1c" stroke-width="2" marker-end="url(#arr)"/>
+        <text x="585" y="155" font-size="10" fill="#b71c1c">p=3</text>
+
+        <!-- Rotated: pos 7 -->
+        <line x1="500" y1="230" x2="590" y2="118" stroke="#8e0000" stroke-width="2" marker-end="url(#arr)"/>
+        <text x="595" y="115" font-size="10" fill="#8e0000">p=7</text>
+
+        <!-- Legend -->
+        <text x="340" y="310" font-size="11" fill="#555">Each position rotates Q by a different angle → dot product Q·K encodes relative distance</text>
+      </svg>
+      <div class="svg-caption">Figure 2: RoPE rotates the Q (and K) vector by an angle proportional to position. Pairs of dimensions rotate as 2D vectors.</div>
+    </div>
+  </div>
+
+
+  <!-- ──── 4. MULTI-HEAD ATTENTION ──── -->
+  <div class="flow-step">
+    <div class="step-header">
+      <span class="step-num">4</span>
+      <span class="step-name">Multi-Head Causal Self-Attention</span>
+    </div>
+
+    <div class="shape-row">
+      <span class="shape">(B, T, 960)</span>
+      <span class="arrow">⟶</span>
+      <span class="shape">(B, T, 960)</span>
+    </div>
+
+    <p class="desc">
+      <strong>The purpose:</strong> Each token gathers information from all previous tokens
+      (including itself). This is the <em>mixing across positions</em> step.
+      The shape stays the same, but internally we split into 15 parallel
+      "heads" that each learn different patterns.
+    </p>
+
+    <h4>Step-by-step dimension tour</h4>
+
+    <p><strong>Step 1 — Fused QKV projection:</strong></p>
+    <pre>x: (B, T, <span class="red">960</span>)
+  ↓ @ W_qkv   (960 × 2880)
+qkv: (B, T, <span class="red">2880</span>)         # fused: 960 for Q + 960 for K + 960 for V
+  ↓ split into 3
+q, k, v: each (B, T, <span class="red">960</span>)</pre>
+
+    <p><strong>Step 2 — Reshape into heads:</strong></p>
+    <pre># Each of q, k, v goes through this:
+q.view(B, T, <span class="red">15</span>, <span class="red">64</span>)   → (B, T, 15, 64)    # 15 groups of 64 dimensions
+  .transpose(1, 2)      → (B, <span class="red">15</span>, T, <span class="red">64</span>)    # heads dimension moves to position 1
+
+# Now q, k, v are each: (B, 15, T, 64)</pre>
+
+    <p>
+      <strong>Why 15 heads of 64?</strong> \(15 \times 64 = 960 = d_{\text{model}}\).
+      Each head attends to the sequence independently — one head might track
+      subject-verb agreement, another topic continuity, another punctuation patterns.
+    </p>
+    <p>
+      <em>Note on the Transpose:</em> Are you wondering why we `.transpose(1, 2)` the \(Q\) matrix here when the original mathematical formula \(\text{Attention}(Q, K, V)\) never transposes \(Q\)? See this detailed breakdown: <a href="docs/Q_Transpose_Explanation.md">The "Transpose of Q" in Multi-Head Attention</a>.
+    </p>
+
+    <p><strong>Step 3 — Apply RoPE to Q and K (not V):</strong></p>
+    <pre>q ← apply_rope(q, cos, sin)   → (B, 15, T, <span class="red">64</span>)
+k ← apply_rope(k, cos, sin)   → (B, 15, T, <span class="red">64</span>)
+# v stays as (B, 15, T, 64) — no rotation</pre>
+
+    <p><strong>Step 4 — Attention scores:</strong></p>
+    <pre>scores = q @ k.transpose(-2, -1)   → (B, 15, <span class="red">T, T</span>)
+scores = scores / √64              # scale to keep softmax gradients healthy</pre>
+
+    <p>
+      Each of the 15 heads gets a <strong>T × T matrix</strong> where entry
+      \((i, j)\) = "how much should token i attend to token j in this head?"
+      The \(\sqrt{64}\) scaling prevents huge dot products (since 64-dim vectors
+      have expected magnitude ~8).
+    </p>
+
+    <p><strong>Step 5 — Causal mask:</strong></p>
+    <pre># Upper triangle (j > i) → -inf
+# Token at position i can only attend to positions ≤ i
+# This is what makes it "causal" or "auto-regressive"
+
+scores[0, h, :, :]  # example for head h:
+  [[2.1, -inf, -inf],     # token 0 attends to token 0 only
+   [1.5, 0.8, -inf],      # token 1 attends to 0 and 1
+   [0.3, 1.2, 0.6]]       # token 2 attends to 0, 1, and 2</pre>
+
+    <p><strong>Step 6 — Softmax + Weighted sum:</strong></p>
+    <pre>weights = softmax(scores, dim=-1)   → (B, 15, <span class="red">T, T</span>)  # each row sums to 1
+out = weights @ v                   → (B, 15, T, <span class="red">64</span>)</pre>
+
+    <p>
+      Each token's output is a <strong>weighted combination of the values</strong>
+      of all tokens it can see. For token 2 ("sat"):
+    </p>
+
+    <pre>out[2] = w[2,0]·v[0] + w[2,1]·v[1] + w[2,2]·v[2]
+# where w[2,0] + w[2,1] + w[2,2] = 1
+# e.g. [0.10, 0.67, 0.23] → "sat" looks mostly at "cat"</pre>
+
+    <p><strong>Step 7 — Concatenate heads + Output projection:</strong></p>
+    <pre>out: (B, 15, T, <span class="red">64</span>)
+  ↓ .transpose(1,2)  → (B, T, 15, 64)
+  ↓ .view(B, T, <span class="red">960</span>)   → (B, T, 960)    # all 15 heads back together
+  ↓ @ W_o  (960 × 960)  → (B, T, <span class="red">960</span>)
+</pre>
+
+    <p>
+      The output projection mixes information <strong>across heads</strong> —
+      the model can decide how to combine the 15 different perspectives
+      into a single 960-dim representation.
+    </p>
+
+    <div class="callout">
+      <div class="title">⟹ The complete attention dimension flow</div>
+      <p>
+        \((B, T, 960) \rightarrow\) QKV split \(\rightarrow 3\times(B, 15, T, 64) \rightarrow\)
+        RoPE on Q,K \(\rightarrow\) scores \((B, 15, T, T) \rightarrow\) weights @ V
+        \(\rightarrow (B, 15, T, 64) \rightarrow\) concat \(\rightarrow (B, T, 960)\)
+      </p>
+      <p>
+        The <strong>only</strong> point where T interacts with itself is the
+        T×T attention matrix. Everything else is independent per position.
+      </p>
+    </div>
+
+    <!-- Attention SVG -->
+    <h4>Visualizing Multi-Head Attention</h4>
+    <div class="svg-wrap">
+      <svg viewBox="0 0 820 520" xmlns="http://www.w3.org/2000/svg" style="font-family:'JetBrains Mono',monospace;">
+        <defs>
+          <marker id="arr2" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+            <polygon points="0 0, 8 3, 0 6" fill="#1a1a1a"/>
+          </marker>
+          <marker id="arrr" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+            <polygon points="0 0, 8 3, 0 6" fill="#e63946"/>
+          </marker>
+        </defs>
+
+        <!-- Input -->
+        <rect x="310" y="10" width="200" height="36" rx="4" fill="none" stroke="#1a1a1a" stroke-width="1.5"/>
+        <text x="410" y="33" text-anchor="middle" font-size="11" fill="#1a1a1a">x: (B, T, 960)</text>
+
+        <!-- Arrow down -->
+        <line x1="410" y1="46" x2="410" y2="75" stroke="#1a1a1a" stroke-width="1.5" marker-end="url(#arr2)"/>
+
+        <!-- QKV box -->
+        <rect x="290" y="78" width="240" height="30" rx="4" fill="#fff0f0" stroke="#e63946" stroke-width="1.5"/>
+        <text x="410" y="97" text-anchor="middle" font-size="10" fill="#e63946">QKV Proj: (B, T, 960) → (B, T, 2880)</text>
+
+        <!-- Split into 3 -->
+        <line x1="410" y1="108" x2="410" y2="130" stroke="#1a1a1a" stroke-width="1.5"/>
+        <line x1="410" y1="130" x2="130" y2="130" stroke="#1a1a1a" stroke-width="1"/>
+        <line x1="410" y1="130" x2="410" y2="130" stroke="#1a1a1a" stroke-width="1"/>
+        <line x1="410" y1="130" x2="690" y2="130" stroke="#1a1a1a" stroke-width="1"/>
+
+        <!-- Q -->
+        <line x1="130" y1="130" x2="130" y2="150" stroke="#1a1a1a" stroke-width="1.5" marker-end="url(#arr2)"/>
+        <rect x="55" y="153" width="150" height="28" rx="4" fill="none" stroke="#1d3557" stroke-width="1.5"/>
+        <text x="130" y="172" text-anchor="middle" font-size="10" fill="#1d3557">Q: (B, T, 960)</text>
+        <line x1="130" y1="181" x2="130" y2="200" stroke="#1d3557" stroke-width="1.5"/>
+        <rect x="55" y="203" width="150" height="28" rx="4" fill="none" stroke="#1d3557" stroke-width="1.5"/>
+        <text x="130" y="222" text-anchor="middle" font-size="10" fill="#1d3557">→ (B, 15, T, 64)</text>
+        <!-- RoPE label on Q -->
+        <text x="73" y="248" font-size="9" fill="#e63946">+RoPE</text>
+
+        <!-- K -->
+        <line x1="410" y1="130" x2="410" y2="150" stroke="#1a1a1a" stroke-width="1.5" marker-end="url(#arr2)"/>
+        <rect x="335" y="153" width="150" height="28" rx="4" fill="none" stroke="#2d6a4f" stroke-width="1.5"/>
+        <text x="410" y="172" text-anchor="middle" font-size="10" fill="#2d6a4f">K: (B, T, 960)</text>
+        <line x1="410" y1="181" x2="410" y2="200" stroke="#2d6a4f" stroke-width="1.5"/>
+        <rect x="335" y="203" width="150" height="28" rx="4" fill="none" stroke="#2d6a4f" stroke-width="1.5"/>
+        <text x="410" y="222" text-anchor="middle" font-size="10" fill="#2d6a4f">→ (B, 15, T, 64)</text>
+        <text x="503" y="248" font-size="9" fill="#e63946">+RoPE</text>
+
+        <!-- V -->
+        <line x1="690" y1="130" x2="690" y2="150" stroke="#1a1a1a" stroke-width="1.5" marker-end="url(#arr2)"/>
+        <rect x="615" y="153" width="150" height="28" rx="4" fill="none" stroke="#7b2d26" stroke-width="1.5"/>
+        <text x="690" y="172" text-anchor="middle" font-size="10" fill="#7b2d26">V: (B, T, 960)</text>
+        <line x1="690" y1="181" x2="690" y2="200" stroke="#7b2d26" stroke-width="1.5"/>
+        <rect x="615" y="203" width="150" height="28" rx="4" fill="none" stroke="#7b2d26" stroke-width="1.5"/>
+        <text x="690" y="222" text-anchor="middle" font-size="10" fill="#7b2d26">→ (B, 15, T, 64)</text>
+
+        <!-- Q and K come together for scores -->
+        <line x1="130" y1="235" x2="300" y2="300" stroke="#1d3557" stroke-width="1.5"/>
+        <line x1="410" y1="235" x2="410" y2="300" stroke="#2d6a4f" stroke-width="1.5"/>
+        <line x1="690" y1="235" x2="520" y2="300" stroke="#7b2d26" stroke-width="1.5"/>
+
+        <!-- Scores -->
+        <rect x="280" y="280" width="260" height="50" rx="4" fill="#fff0f0" stroke="#e63946" stroke-width="1.5"/>
+        <text x="410" y="300" text-anchor="middle" font-size="10" fill="#e63946">Q @ K^T / √64</text>
+        <text x="410" y="316" text-anchor="middle" font-size="11" fill="#1a1a1a">Scores: (B, 15, T, T)</text>
+
+        <!-- Causal mask -->
+        <line x1="410" y1="330" x2="410" y2="350" stroke="#e63946" stroke-width="1.5" marker-end="url(#arrr)"/>
+        <rect x="320" y="353" width="180" height="24" rx="4" fill="#f5f5f5" stroke="#1a1a1a" stroke-width="1"/>
+        <text x="410" y="369" text-anchor="middle" font-size="9" fill="#1a1a1a">+ Causal Mask (upper → -inf)</text>
+
+        <!-- Softmax row -->
+        <line x1="410" y1="377" x2="410" y2="395" stroke="#1a1a1a" stroke-width="1.5" marker-end="url(#arr2)"/>
+        <rect x="310" y="398" width="200" height="24" rx="4" fill="none" stroke="#1a1a1a" stroke-width="1.5"/>
+        <text x="410" y="415" text-anchor="middle" font-size="10" fill="#1a1a1a">Softmax → Weights: (B, 15, T, T)</text>
+
+        <!-- Weighted sum -->
+        <line x1="410" y1="422" x2="410" y2="440" stroke="#1a1a1a" stroke-width="1.5"/>
+        <line x1="410" y1="440" x2="520" y2="440" stroke="#1a1a1a" stroke-width="1"/>
+        <line x1="520" y1="300" x2="520" y2="440" stroke="#7b2d26" stroke-width="1" stroke-dasharray="4,2"/>
+        <circle cx="520" cy="440" r="3" fill="#1a1a1a"/>
+
+        <!-- Final output -->
+        <line x1="410" y1="440" x2="410" y2="460" stroke="#1a1a1a" stroke-width="1.5" marker-end="url(#arr2)"/>
+        <rect x="290" y="463" width="240" height="30" rx="4" fill="#fff0f0" stroke="#e63946" stroke-width="1.5"/>
+        <text x="410" y="482" text-anchor="middle" font-size="10" fill="#e63946">Weights @ V → (B, 15, T, 64)</text>
+
+        <!-- Output proj -->
+        <line x1="410" y1="493" x2="410" y2="512" stroke="#1a1a1a" stroke-width="1.5" marker-end="url(#arrr)"/>
+        <rect x="290" y="490" width="240" height="24" rx="4" fill="none" stroke="#e63946" stroke-width="1.5" stroke-dasharray="4,2"/>
+        <text x="410" y="506" text-anchor="middle" font-size="10" fill="#e63946">Concat heads → O proj → (B, T, 960)</text>
+      </svg>
+      <div class="svg-caption">Figure 3: Inside multi-head attention. QKV split → reshape into 15 heads → RoPE on Q,K → scores → causal mask → softmax → weighted sum → concat.</div>
+    </div>
+  </div>
+
+
+  <!-- ──── 5. SwiGLU MLP ──── -->
+  <div class="flow-step">
+    <div class="step-header">
+      <span class="step-num">5</span>
+      <span class="step-name">SwiGLU MLP</span>
+    </div>
+
+    <div class="shape-row">
+      <span class="shape">(B, T, 960)</span>
+      <span class="arrow">→</span>
+      <span class="shape">(B, T, 960)</span>
+    </div>
+
+    <p class="desc">
+      <strong>The purpose:</strong> Unlike attention (which mixes <em>across positions</em>),
+      the MLP processes <strong>each position independently</strong>. It's the per-token
+      "thinking" step — expanding to a larger intermediate space, applying a
+      nonlinearity, and projecting back.
+    </p>
+
+    <p><strong>Why SwiGLU instead of a standard 2-layer MLP?</strong></p>
+    <ul>
+      <li><strong>Standard MLP:</strong> \(y = W_2 \cdot \text{ReLU}(W_1 \cdot x)\) — 2 matrices</li>
+      <li><strong>SwiGLU:</strong> \(y = W_{\text{down}}(\text{silu}(W_{\text{gate}} \cdot x) \odot W_{\text{up}} \cdot x)\) — 3 matrices</li>
+    </ul>
+
+    <p>
+      The <strong>gate</strong> path (\(\text{silu}(W_{\text{gate}} x)\)) learns to <em>selectively
+      activate or suppress</em> features. The <strong>up</strong> path (\(W_{\text{up}} x\)) computes
+      candidate features. The gate and up are multiplied element-wise — if the gate
+      outputs near 0 for a feature, that feature is blocked. This gives the model
+      finer control than a simple ReLU.
+    </p>
+
+    <p><strong>The math:</strong></p>
+    \[
+    \text{SwiGLU}(x) = W_{\text{down}} \big( \underbrace{\text{silu}(W_{\text{gate}} \cdot x)}_{\text{gate}} \odot \underbrace{W_{\text{up}} \cdot x}_{\text{candidate}} \big)
+    \]
+
+    <p>
+      where \(\text{silu}(x) = x \cdot \sigma(x) = \frac{x}{1 + e^{-x}}\) (smooth, non-monotonic activation).
+    </p>
+
+    <pre>x: (B, T, <span class="red">960</span>)
+
+gate = silu(x @ W_gate)   → (B, T, <span class="red">2560</span>)   # gate path
+up   = x @ W_up           → (B, T, <span class="red">2560</span>)   # up path
+hidden = gate × up        → (B, T, <span class="red">2560</span>)   # element-wise gating
+out  = hidden @ W_down    → (B, T, <span class="red">960</span>)    # project back down</pre>
+
+    <div class="callout">
+      <div class="title">⟹ Why intermediate_size = 2560?</div>
+      <p>
+        A standard 2-matrix MLP with expansion factor 4 has intermediate
+        size \(4 \times 960 = 3840\). With 3 matrices, to keep the same
+        parameter count we use \(\frac{8}{3} \times d_{\text{model}} = 2560\).
+        The parameter count: \(960 \times 2560 \times 3 \approx 7.37M\)
+        compared to \(960 \times 3840 \times 2 \approx 7.37M\) — <strong>exactly the same</strong>.
+      </p>
+    </div>
+  </div>
+
+
+  <!-- ──── 6. DECODER LAYER ──── -->
+  <div class="flow-step">
+    <div class="step-header">
+      <span class="step-num">6</span>
+      <span class="step-name">The Decoder Layer — Putting It Together</span>
+    </div>
+
+    <div class="shape-row">
+      <span class="shape">(B, T, 960)</span>
+      <span class="arrow">→</span>
+      <span class="shape">(B, T, 960)</span>
+    </div>
+
+    <p class="desc">
+      One decoder layer = <strong>attention sublayer</strong> + <strong>MLP sublayer</strong>,
+      each wrapped in <strong>pre-norm</strong> (normalize before the sublayer) and a
+      <strong>residual connection</strong> (add the input back).
+    </p>
+
+    <p>
+      This is the most important architectural unit in the whole model.
+      If you understand one decoder layer, the full 30-layer model is just this
+      same operation repeated many times. The layer does not change the tensor
+      shape. It changes the <em>meaning</em> stored inside the residual stream.
+    </p>
+
+    <div class="svg-wrap">
+      <svg viewBox="0 0 760 500" xmlns="http://www.w3.org/2000/svg" style="font-family:'JetBrains Mono',monospace;">
+        <defs>
+          <marker id="arr3" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+            <polygon points="0 0, 8 3, 0 6" fill="#1a1a1a"/>
+          </marker>
+          <marker id="arr3r" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+            <polygon points="0 0, 8 3, 0 6" fill="#e63946"/>
+          </marker>
+        </defs>
+
+        <!-- First residual block -->
+        <text x="380" y="26" text-anchor="middle" font-size="13" font-weight="700" fill="#1a1a1a">One decoder layer = two residual updates</text>
+
+        <rect x="60" y="55" width="160" height="34" rx="4" fill="none" stroke="#1a1a1a" stroke-width="1.5"/>
+        <text x="140" y="77" text-anchor="middle" font-size="11" fill="#1a1a1a">x: (B,T,960)</text>
+
+        <line x1="220" y1="72" x2="275" y2="72" stroke="#1a1a1a" stroke-width="1.5" marker-end="url(#arr3)"/>
+        <rect x="280" y="55" width="140" height="34" rx="4" fill="none" stroke="#1a1a1a" stroke-width="1.5"/>
+        <text x="350" y="77" text-anchor="middle" font-size="11" fill="#1a1a1a">RMSNorm(x)</text>
+
+        <line x1="420" y1="72" x2="475" y2="72" stroke="#1a1a1a" stroke-width="1.5" marker-end="url(#arr3)"/>
+        <rect x="480" y="45" width="215" height="54" rx="4" fill="#fff0f0" stroke="#e63946" stroke-width="1.5"/>
+        <text x="587" y="67" text-anchor="middle" font-size="11" fill="#e63946">Attention update</text>
+        <text x="587" y="84" text-anchor="middle" font-size="9" fill="#1a1a1a">Q,K,V + RoPE + causal mixing</text>
+
+        <line x1="587" y1="99" x2="587" y2="128" stroke="#1a1a1a" stroke-width="1.5" marker-end="url(#arr3)"/>
+        <circle cx="587" cy="146" r="16" fill="#fff" stroke="#e63946" stroke-width="2"/>
+        <text x="587" y="151" text-anchor="middle" font-size="16" fill="#e63946" font-weight="700">+</text>
+
+        <path d="M 140 89 C 140 145, 460 146, 566 146" fill="none" stroke="#e63946" stroke-width="1.8" stroke-dasharray="5,3" marker-end="url(#arr3r)"/>
+        <text x="260" y="134" font-size="10" fill="#e63946">skip original x around attention</text>
+
+        <line x1="603" y1="146" x2="650" y2="146" stroke="#1a1a1a" stroke-width="1.5" marker-end="url(#arr3)"/>
+        <rect x="655" y="129" width="75" height="34" rx="4" fill="none" stroke="#e63946" stroke-width="1.5"/>
+        <text x="692" y="151" text-anchor="middle" font-size="11" fill="#e63946">x'</text>
+
+        <!-- Second residual block -->
+        <line x1="692" y1="163" x2="692" y2="220" stroke="#1a1a1a" stroke-width="1.5"/>
+        <line x1="692" y1="220" x2="420" y2="220" stroke="#1a1a1a" stroke-width="1.5" marker-end="url(#arr3)"/>
+
+        <rect x="280" y="203" width="140" height="34" rx="4" fill="none" stroke="#1a1a1a" stroke-width="1.5"/>
+        <text x="350" y="225" text-anchor="middle" font-size="11" fill="#1a1a1a">RMSNorm(x')</text>
+
+        <line x1="280" y1="220" x2="225" y2="220" stroke="#1a1a1a" stroke-width="1.5" marker-end="url(#arr3)"/>
+        <rect x="45" y="193" width="175" height="54" rx="4" fill="#fff0f0" stroke="#e63946" stroke-width="1.5"/>
+        <text x="132" y="215" text-anchor="middle" font-size="11" fill="#e63946">SwiGLU MLP update</text>
+        <text x="132" y="232" text-anchor="middle" font-size="9" fill="#1a1a1a">960 -> 2560 -> 960, per token</text>
+
+        <line x1="132" y1="247" x2="132" y2="282" stroke="#1a1a1a" stroke-width="1.5" marker-end="url(#arr3)"/>
+        <circle cx="132" cy="302" r="16" fill="#fff" stroke="#e63946" stroke-width="2"/>
+        <text x="132" y="307" text-anchor="middle" font-size="16" fill="#e63946" font-weight="700">+</text>
+
+        <path d="M 692 163 C 700 308, 260 302, 153 302" fill="none" stroke="#e63946" stroke-width="1.8" stroke-dasharray="5,3" marker-end="url(#arr3r)"/>
+        <text x="418" y="287" font-size="10" fill="#e63946">skip x' around MLP</text>
+
+        <line x1="132" y1="318" x2="132" y2="365" stroke="#1a1a1a" stroke-width="1.5" marker-end="url(#arr3)"/>
+        <rect x="52" y="370" width="160" height="34" rx="4" fill="none" stroke="#e63946" stroke-width="1.5"/>
+        <text x="132" y="392" text-anchor="middle" font-size="11" fill="#e63946">x'': (B,T,960)</text>
+
+        <!-- Notes -->
+        <rect x="285" y="350" width="420" height="95" rx="6" fill="#fafafa" stroke="#ddd" stroke-width="1"/>
+        <text x="300" y="374" font-size="10" fill="#1a1a1a" font-weight="700">Read the diagram as corrections, not replacements:</text>
+        <text x="300" y="396" font-size="10" fill="#555">1. Attention writes a context-mixing correction: x' = x + Attn(RMSNorm(x))</text>
+        <text x="300" y="416" font-size="10" fill="#555">2. MLP writes a feature-mixing correction: x'' = x' + MLP(RMSNorm(x'))</text>
+        <text x="300" y="436" font-size="10" fill="#555">Both outputs keep the same shape, so 30 layers can stack cleanly.</text>
+      </svg>
+      <div class="svg-caption">Figure 4: One decoder layer. Each sublayer proposes a correction; the residual path keeps the original stream available and keeps gradients stable.</div>
+    </div>
+
+    <p><strong>The two equations that define a decoder layer:</strong></p>
+    \[
+    x' = x + \text{Attention}(\text{RMSNorm}(x))
+    \]
+    \[
+    x'' = x' + \text{MLP}(\text{RMSNorm}(x'))
+    \]
+
+    <p>
+      <strong>Why pre-norm?</strong> In the original "post-norm" Transformer, the
+      normalization was applied <em>after</em> the sublayer. This caused gradients
+      to vanish beyond ~12 layers. Pre-norm ensures the <strong>residual stream</strong>
+      is always well-conditioned — gradients flow through the skip connection
+      almost unchanged.
+    </p>
+
+    <div class="plain-card">
+      <div class="label">What question do these equations answer?</div>
+      <p>
+        The question is: <strong>how can a deep model change information without
+        destroying the useful signal already present?</strong> If a layer replaced
+        <code>x</code> completely, every layer would risk wiping out what earlier
+        layers learned. The residual form says: keep the old representation and
+        only add a learned correction. That makes depth useful instead of fragile.
+      </p>
+    </div>
+
+    <p>
+      There are two kinds of correction. <strong>Attention</strong> says,
+      "for this token, what should I borrow from earlier tokens?" That is why it
+      builds the <code>T × T</code> matrix. <strong>MLP</strong> says, "now that
+      this token has context, what internal features should I strengthen,
+      suppress, or recombine?" That is why it expands 960 features to 2560,
+      gates them, and compresses back to 960.
+    </p>
+
+    <h4>Parameter math inside one decoder layer</h4>
+
+    <p>
+      The layer shape stays \((B,T,960)\), but the learned matrices inside the
+      layer are large. This is where most of the model's parameters live.
+    </p>
+
+    <table class="trace-table">
+      <thead>
+        <tr>
+          <th>Component</th>
+          <th>Weight shape</th>
+          <th>Parameter count</th>
+          <th>Why it exists</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>QKV projection</td>
+          <td>960 × 2880</td>
+          <td>2.76M</td>
+          <td>Creates Q, K, and V in one fused matrix multiply.</td>
+        </tr>
+        <tr>
+          <td>Attention output projection</td>
+          <td>960 × 960</td>
+          <td>0.92M</td>
+          <td>Mixes the 15 attention heads back into one residual update.</td>
+        </tr>
+        <tr>
+          <td>SwiGLU gate projection</td>
+          <td>960 × 2560</td>
+          <td>2.46M</td>
+          <td>Decides which expanded features should pass through.</td>
+        </tr>
+        <tr>
+          <td>SwiGLU up projection</td>
+          <td>960 × 2560</td>
+          <td>2.46M</td>
+          <td>Computes candidate features in the expanded space.</td>
+        </tr>
+        <tr>
+          <td>SwiGLU down projection</td>
+          <td>2560 × 960</td>
+          <td>2.46M</td>
+          <td>Compresses the gated features back to the residual width.</td>
+        </tr>
+        <tr>
+          <td>Two RMSNorm scales</td>
+          <td>2 × 960</td>
+          <td>0.002M</td>
+          <td>Learns per-feature scaling before attention and MLP.</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <p>
+      One decoder layer is about <strong>11.06M parameters</strong>.
+      Thirty layers are about <strong>331.8M parameters</strong>.
+      The token embedding is another <strong>32,768 × 960 = 31.5M</strong>.
+      Because the LM head reuses that same embedding matrix, we avoid paying
+      another 31.5M parameters at the output. This is how the full model lands
+      around <strong>363M parameters</strong>.
+    </p>
+
+    <h4>Same decoder layer from different perspectives</h4>
+
+    <table class="trace-table">
+      <thead>
+        <tr>
+          <th>Perspective</th>
+          <th>How to see the same layer</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Architecture</td>
+          <td>The layer has two jobs: attention mixes information across token positions; MLP mixes information across features inside each token.</td>
+        </tr>
+        <tr>
+          <td>Linear algebra</td>
+          <td>Almost everything is matrix multiplication: project 960 features into Q/K/V, rotate Q/K pairs, multiply Q by K, then project back.</td>
+        </tr>
+        <tr>
+          <td>Optimization</td>
+          <td>Residual connections make every layer learn a correction instead of a full replacement, which gives gradients a cleaner path backward.</td>
+        </tr>
+        <tr>
+          <td>Probability</td>
+          <td>Attention weights are probabilities over visible tokens. Each row says how much this token should trust each previous token.</td>
+        </tr>
+        <tr>
+          <td>Information theory</td>
+          <td>The layer moves useful context into each token's vector so the final distribution over next tokens has lower uncertainty.</td>
+        </tr>
+        <tr>
+          <td>Software / tensors</td>
+          <td>The stable interface is the key engineering trick: every layer accepts <code>(B,T,960)</code> and returns <code>(B,T,960)</code>.</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <p>
+      <strong>Think of it this way:</strong> The residual stream is a
+      "scratchpad" that starts as the token embedding. Each layer reads
+      the current state, computes a correction (attention or MLP), and
+      adds it back. After 30 corrections, the representation is rich
+      enough to predict the next token.
+    </p>
+  </div>
+
+
+  <!-- ──── 7. 30 LAYERS STACKED ──── -->
+  <div class="flow-step">
+    <div class="step-header">
+      <span class="step-num">7</span>
+      <span class="step-name">Stacking 30 Layers</span>
+    </div>
+
+    <p class="desc">
+      <strong>Each layer</strong> does the same thing: read from the residual stream,
+      refine the representation, write back. But <strong>what they learn</strong>
+      changes with depth:
+    </p>
+
+    <ul>
+      <li><strong>Early layers (1–8):</strong> Learn syntax, word boundaries, basic grammar.
+        Attention patterns are local (adjacent tokens).</li>
+      <li><strong>Middle layers (9–20):</strong> Learn semantics, coreference, topic tracking.
+        Attention spans grow longer.</li>
+      <li><strong>Late layers (21–30):</strong> Learn higher-level reasoning, planning,
+        and task-specific features. Attention becomes sparse and focused.</li>
+    </ul>
+
+    <p>
+      These boundaries are not hard rules. A trained transformer does not label
+      one layer "grammar" and another layer "reasoning." This is the common
+      pattern researchers observe: shallow layers tend to capture local and
+      lexical features; middle layers combine context; later layers become more
+      specialized for predicting the next token under the current task.
+    </p>
+
+    <div class="svg-wrap">
+      <svg viewBox="0 0 920 200" xmlns="http://www.w3.org/2000/svg" style="font-family:'JetBrains Mono',monospace;">
+        <defs>
+          <marker id="arr-red" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto">
+            <polygon points="0 0, 10 3.5, 0 7" fill="#e63946"/>
+          </marker>
+        </defs>
+
+        <!-- Residual stream background bar -->
+        <rect x="40" y="55" width="780" height="55" rx="6" fill="#f5f5f5" stroke="#1a1a1a" stroke-width="1.2"/>
+        <text x="430" y="78" text-anchor="middle" font-size="11" fill="#1a1a1a" font-weight="700">RESIDUAL STREAM — (B, T, 960)</text>
+        <text x="430" y="95" text-anchor="middle" font-size="9" fill="#888">Same shape through all 30 layers. Only the content evolves.</text>
+
+        <!-- ===== GROUP 1: EARLY (Layers 1-10) ===== -->
+        <rect x="60" y="77" width="16" height="30" rx="3" fill="#fff0f0" stroke="#e63946" stroke-width="1.5"/>
+        <text x="68" y="96" text-anchor="middle" font-size="8" fill="#e63946" font-weight="700">1</text>
+
+        <rect x="79" y="77" width="14" height="30" rx="3" fill="#fce4e4" stroke="#d0a0a0" stroke-width="0.5"/>
+        <rect x="98" y="77" width="14" height="30" rx="3" fill="#fce4e4" stroke="#d0a0a0" stroke-width="0.5"/>
+        <rect x="117" y="77" width="14" height="30" rx="3" fill="#fce4e4" stroke="#d0a0a0" stroke-width="0.5"/>
+        <rect x="136" y="77" width="14" height="30" rx="3" fill="#fce4e4" stroke="#d0a0a0" stroke-width="0.5"/>
+        <rect x="155" y="77" width="14" height="30" rx="3" fill="#fce4e4" stroke="#d0a0a0" stroke-width="0.5"/>
+        <rect x="174" y="77" width="14" height="30" rx="3" fill="#fce4e4" stroke="#d0a0a0" stroke-width="0.5"/>
+        <rect x="193" y="77" width="14" height="30" rx="3" fill="#fce4e4" stroke="#d0a0a0" stroke-width="0.5"/>
+        <rect x="212" y="77" width="14" height="30" rx="3" fill="#fce4e4" stroke="#d0a0a0" stroke-width="0.5"/>
+        <rect x="231" y="77" width="14" height="30" rx="3" fill="#fce4e4" stroke="#d0a0a0" stroke-width="0.5"/>
+
+        <text x="238" y="117" text-anchor="middle" font-size="7" fill="#888">10</text>
+
+        <circle cx="252" cy="92" r="2" fill="#ccc"/>
+        <circle cx="260" cy="92" r="2" fill="#ccc"/>
+        <circle cx="268" cy="92" r="2" fill="#ccc"/>
+
+        <!-- ===== GROUP 2: MIDDLE (Layers 11-20) ===== -->
+        <rect x="280" y="77" width="14" height="30" rx="3" fill="#fce4e4" stroke="#d0a0a0" stroke-width="0.5"/>
+        <rect x="299" y="77" width="14" height="30" rx="3" fill="#fce4e4" stroke="#d0a0a0" stroke-width="0.5"/>
+        <rect x="318" y="77" width="14" height="30" rx="3" fill="#fce4e4" stroke="#d0a0a0" stroke-width="0.5"/>
+        <rect x="337" y="77" width="14" height="30" rx="3" fill="#fce4e4" stroke="#d0a0a0" stroke-width="0.5"/>
+        <rect x="356" y="77" width="14" height="30" rx="3" fill="#fce4e4" stroke="#d0a0a0" stroke-width="0.5"/>
+        <rect x="375" y="77" width="14" height="30" rx="3" fill="#fce4e4" stroke="#d0a0a0" stroke-width="0.5"/>
+        <rect x="394" y="77" width="14" height="30" rx="3" fill="#fce4e4" stroke="#d0a0a0" stroke-width="0.5"/>
+        <rect x="413" y="77" width="14" height="30" rx="3" fill="#fce4e4" stroke="#d0a0a0" stroke-width="0.5"/>
+        <rect x="432" y="77" width="14" height="30" rx="3" fill="#fce4e4" stroke="#d0a0a0" stroke-width="0.5"/>
+        <rect x="451" y="77" width="14" height="30" rx="3" fill="#fce4e4" stroke="#d0a0a0" stroke-width="0.5"/>
+
+        <circle cx="472" cy="92" r="2" fill="#ccc"/>
+        <circle cx="480" cy="92" r="2" fill="#ccc"/>
+        <circle cx="488" cy="92" r="2" fill="#ccc"/>
+
+        <!-- ===== GROUP 3: LATE (Layers 21-30) ===== -->
+        <rect x="500" y="77" width="14" height="30" rx="3" fill="#fce4e4" stroke="#d0a0a0" stroke-width="0.5"/>
+        <rect x="519" y="77" width="14" height="30" rx="3" fill="#fce4e4" stroke="#d0a0a0" stroke-width="0.5"/>
+        <rect x="538" y="77" width="14" height="30" rx="3" fill="#fce4e4" stroke="#d0a0a0" stroke-width="0.5"/>
+        <rect x="557" y="77" width="14" height="30" rx="3" fill="#fce4e4" stroke="#d0a0a0" stroke-width="0.5"/>
+        <rect x="576" y="77" width="14" height="30" rx="3" fill="#fce4e4" stroke="#d0a0a0" stroke-width="0.5"/>
+        <rect x="595" y="77" width="14" height="30" rx="3" fill="#fce4e4" stroke="#d0a0a0" stroke-width="0.5"/>
+        <rect x="614" y="77" width="14" height="30" rx="3" fill="#fce4e4" stroke="#d0a0a0" stroke-width="0.5"/>
+        <rect x="633" y="77" width="14" height="30" rx="3" fill="#fce4e4" stroke="#d0a0a0" stroke-width="0.5"/>
+        <rect x="652" y="77" width="14" height="30" rx="3" fill="#fce4e4" stroke="#d0a0a0" stroke-width="0.5"/>
+
+        <rect x="671" y="77" width="16" height="30" rx="3" fill="#fff0f0" stroke="#e63946" stroke-width="1.5"/>
+        <text x="679" y="96" text-anchor="middle" font-size="8" fill="#e63946" font-weight="700">30</text>
+
+        <!-- Arrow → Final LM Head -->
+        <line x1="694" y1="92" x2="730" y2="92" stroke="#e63946" stroke-width="2" marker-end="url(#arr-red)"/>
+        <text x="745" y="84" font-size="9" fill="#e63946" font-weight="700">To</text>
+        <text x="745" y="97" font-size="9" fill="#e63946" font-weight="700">Final</text>
+        <text x="745" y="110" font-size="9" fill="#e63946" font-weight="700">LM Head</text>
+
+        <!-- Group labels -->
+        <text x="146" y="133" text-anchor="middle" font-size="11" fill="#1a1a1a" font-weight="700">EARLY</text>
+        <text x="366" y="133" text-anchor="middle" font-size="11" fill="#1a1a1a" font-weight="700">MIDDLE</text>
+        <text x="586" y="133" text-anchor="middle" font-size="11" fill="#1a1a1a" font-weight="700">LATE</text>
+
+        <text x="146" y="149" text-anchor="middle" font-size="8" fill="#888">(Layers 1-10)</text>
+        <text x="366" y="149" text-anchor="middle" font-size="8" fill="#888">(Layers 11-20)</text>
+        <text x="586" y="149" text-anchor="middle" font-size="8" fill="#888">(Layers 21-30)</text>
+
+        <!-- Description -->
+        <text x="430" y="180" text-anchor="middle" font-size="9" fill="#888">Each layer: RMSNorm → Attention → + → RMSNorm → SwiGLU MLP → +</text>
+      </svg>
+      <div class="svg-caption">Figure 5: 30 decoder layers stacked in three groups. Each layer refines the (B, T, 960) representation. The shape never changes — only the content evolves.</div>
+    </div>
+
+    <div class="plain-card">
+      <div class="label">Why repeat the same block 30 times?</div>
+      <p>
+        One layer can do one round of communication and feature transformation.
+        Thirty layers means thirty chances to revise the residual stream. A
+        token can first detect local syntax, then connect to a subject, then
+        resolve what phrase it belongs to, then prepare a next-token prediction.
+        Depth gives the model an iterative computation, not just a bigger table.
+      </p>
+    </div>
+
+    <p>
+      From a math perspective, the stack is function composition:
+      \(x_{1} = f_1(x_0)\), \(x_{2} = f_2(x_1)\), ..., \(x_{30} = f_{30}(x_{29})\).
+      The key is that every \(f_i\) maps \((B,T,960)\) back to \((B,T,960)\).
+      Because the interface is stable, we can stack many layers without changing
+      the rest of the model.
+    </p>
+  </div>
+
+
+  <!-- ──── 8. FINAL NORM + LM HEAD ──── -->
+  <div class="flow-step">
+    <div class="step-header">
+      <span class="step-num">8</span>
+      <span class="step-name">Final Norm + LM Head — Making Predictions</span>
+    </div>
+
+    <div class="shape-row">
+      <span class="shape">(B, T, 960)</span>
+      <span class="arrow">→</span>
+      <span class="shape">(B, T, 32768)</span>
+    </div>
+
+    <p class="desc">
+      After 30 layers of refinement, we finally convert the model's
+      <strong>understanding</strong> into <strong>predictions</strong>.
+      This is where the rubber meets the road — we go from "what the
+      model knows about each token" to "which token should come next."
+      The feature dimension changes for the <strong>first time</strong>
+      since the initial embedding.
+    </p>
+
+    <!-- ═══ Step 1: Final RMSNorm ═══ -->
+    <h3>Step 1: Final RMSNorm — One Last Stabilization</h3>
+
+    <p>
+      Before making predictions, we run RMSNorm one last time. This keeps
+      the numbers well-behaved before the big projection. Same operation
+      as before — just one final check.
+    </p>
+
+    <pre>x: (B, T, 960)
+  ↓ RMSNorm
+x: (B, T, 960)   ← same shape, just stabilized values</pre>
+
+    <!-- ═══ Step 2: The LM Head ═══ -->
+    <h3>Step 2: The LM Head — From "Meaning" to "Scores"</h3>
+
+    <p>
+      The <strong>LM Head</strong> (Language Model Head) is the final projection.
+      It takes the 960-number "understanding" of each token and converts it into
+      <strong>32,768 raw scores</strong> — one for every token in the vocabulary.
+    </p>
+
+    <p>
+      This is where the architecture stops being "hidden representation" and
+      becomes an actual language model. Before this point, every position has
+      a 960-dimensional internal state. After the LM head, every position has
+      a score for every possible next token.
+    </p>
+
+    <pre>x: (B, T, <span class="red">960</span>)
+  ↓ @ embed.weight.T  (matrix multiply: 960 × 32768)
+logits: (B, T, <span class="red">32768</span>)   ← one raw score per vocabulary token</pre>
+
+    <div class="callout">
+      <div class="title">⟹ What the LM head actually does (very simply)</div>
+      <p>
+        Think of the embedding matrix as a <strong>codebook</strong> with
+        32,768 entries. Each entry is a 960-number "meaning vector" for one
+        token — like "the meaning of 'cat'" or "the meaning of 'sat'."
+      </p>
+      <p>
+        The LM head asks: <em>"How similar is my current understanding
+        (the 960-dim vector) to each of these 32,768 meaning vectors?"</em>
+      </p>
+      <p>
+      Tokens whose meaning vector is <strong>similar</strong> get a
+      <strong>high score</strong>. Tokens that are <strong>dissimilar</strong>
+      get a <strong>low score</strong> (possibly negative).
+      </p>
+    </div>
+
+    <div class="plain-card">
+      <div class="label">Geometry View</div>
+      <p>
+        At the last hidden layer, the model gives each position a vector
+        \(h_t \in \mathbb{R}^{960}\). The tied LM head compares \(h_t\) with
+        every token embedding \(E_i\). The logit for token \(i\) is roughly a
+        dot product: \(z_i = h_t \cdot E_i\). If the angle and magnitude line up,
+        the score is high. If they point in unrelated directions, the score is low.
+      </p>
+    </div>
+
+    <!-- ═══ What are logits? ═══ -->
+    <h3>What Are Logits? (The Most Important Concept)</h3>
+
+    <p>
+      Those 32,768 raw scores are called <strong>logits</strong>.
+      Let's understand them from a few different angles:
+    </p>
+
+    <div style="border:1px solid #ddd; border-radius:6px; padding:1rem 1.4rem; margin:1.2rem 0; background:#fff;">
+      <p style="font-weight:800; font-size:0.85rem; text-transform:uppercase; color:#888; letter-spacing:0.08em; margin:0 0 0.5rem 0;">Analogy — Voting</p>
+      <p style="margin:0;">
+        Imagine 960 experts voting on which token should come next. Each
+        expert has their own opinion. The LM head counts all the votes.
+        A logit of +5.1 means "lots of experts voted for this token."
+        A logit of -3.2 means "most experts voted against this token."
+      </p>
+    </div>
+
+    <div style="border:1px solid #ddd; border-radius:6px; padding:1rem 1.4rem; margin:1.2rem 0; background:#fff;">
+      <p style="font-weight:800; font-size:0.85rem; text-transform:uppercase; color:#888; letter-spacing:0.08em; margin:0 0 0.5rem 0;">Analogy — Thermometer</p>
+      <p style="margin:0;">
+        Think of logits as <strong>temperatures</strong>. A high positive
+        logit = hot (the model feels strongly this token is right).
+        A low negative logit = cold (the model feels this token is wrong).
+        Zero = neutral.
+      </p>
+    </div>
+
+    <div style="border:1px solid #ddd; border-radius:6px; padding:1rem 1.4rem; margin:1.2rem 0; background:#fff;">
+      <p style="font-weight:800; font-size:0.85rem; text-transform:uppercase; color:#888; letter-spacing:0.08em; margin:0 0 0.5rem 0;">Key Property — Logits Are Unbounded (Not Probabilities!)</p>
+      <p style="margin:0;">
+        Logits can be <strong>any number</strong>: -100, -5, 0, 3.7, 1000.
+        There's no upper or lower limit. This is great for the model
+        (it never has to hold back) but bad for human interpretation.
+        <strong>We need softmax to convert them into probabilities.</strong>
+      </p>
+    </div>
+
+    <!-- ═══ Step 3: Softmax ═══ -->
+    <h3>Step 3: Softmax — Turning Raw Scores Into Probabilities</h3>
+
+    <p>
+      Softmax does two simple things:
+    </p>
+
+    <ol>
+      <li><strong>Exponentiate</strong> every logit: \(e^{\text{logit}}\).
+        This makes all scores positive. A logit of 5.1 becomes ~164.
+        A logit of -3.2 becomes ~0.04. Large logits stay large,
+        negative logits become tiny.</li>
+      <li><strong>Divide by the total sum</strong> of all exponentiated logits.
+        Now every number is between 0 and 1, and they all add up to 1.</li>
+    </ol>
+
+    \[
+    p_i = \frac{e^{z_i}}{\sum_{j=1}^{32768} e^{z_j}}
+    \]
+
+    <p>
+      After softmax, we have a <strong>valid probability distribution</strong>
+      over 32,768 tokens. High logit → high probability. Low logit → low
+      probability. And \(\sum p_i = 1.0\).
+    </p>
+
+    <h3>Step 4: Cross-Entropy — How Training Judges the Prediction</h3>
+
+    <p>
+      Softmax gives a probability for every token. Training now asks one very
+      simple question: <strong>how much probability did the model assign to the
+      actual next token?</strong>
+    </p>
+
+    <p>
+      If the true next token is \(y\), the loss for this one position is:
+    </p>
+
+    \[
+    \text{loss} = -\log p_y
+    \]
+
+    <p>
+      This equation exists because we need a penalty with the right behavior:
+      if the model gives the correct token high probability, the loss is small;
+      if it gives the correct token tiny probability, the loss becomes large.
+      The logarithm matters because probability products over many tokens turn
+      into sums, which makes training numerically manageable.
+    </p>
+
+    <pre># In model/slm_model.py:
+loss = F.cross_entropy(
+    logits.view(-1, logits.size(-1)),   # (B*T, vocab)
+    labels.view(-1),                    # (B*T,)
+)
+
+# Meaning:
+# every position in every sequence becomes one training example</pre>
+
+    <div class="plain-card">
+      <div class="label">Dry Run of the Loss</div>
+      <p>
+        Suppose the correct next token after "sat" is "on". If the model gives
+        \(p("on") = 0.28\), the loss is \(-\log(0.28) \approx 1.27\).
+        If it gives \(p("on") = 0.001\), the loss is \(-\log(0.001) \approx 6.91\).
+        The bad prediction receives a much stronger correction during backprop.
+      </p>
+    </div>
+
+    <!-- ═══ Concrete Example ═══ -->
+    <h3>Concrete Example — "The cat sat"</h3>
+
+    <p>At position 2 (predicting what comes after "sat"), the logits look like:</p>
+
+    <pre>z["on"]  = <span class="red">5.12</span>   ← Very high! Model thinks "sat on" is likely
+z["the"] = 3.78   ← Also high: "sat on the"
+z["."]   = 2.01   ← Possible: end of sentence
+z["sat"] = 0.84   ← Neutral: repeating the word?
+z["cat"] = <span class="gry">-1.15</span>  ← Low: "cat" already appeared
+z["elephant"] = <span class="gry">-2.45</span> ← Very low: strange continuation
+
+After softmax:
+p["on"]  = 0.28   ← 28% chance (most likely)
+p["the"] = 0.19   ← 19% chance
+p["."]   = 0.06   ← 6% chance
+p["sat"] = 0.04   ← 4% chance
+p["cat"] = 0.004  ← 0.4% chance
+p["elephant"] = 0.0003 ← 0.03% chance
+(All 32768 probabilities sum to exactly 1.0)</pre>
+
+    <p>
+      The model thinks "on" is the best continuation (28% probability).
+      If the actual next word in the data is "on", the model will be
+      rewarded. If it's something else, the model will be penalized
+      proportionally.
+    </p>
+
+    <div class="callout">
+      <div class="title">⟹ Tied Embeddings — Saving 31.5 Million Parameters</div>
+      <p>
+        The same matrix \(E\) (32,768 × 960) does double duty:
+      </p>
+      <ul>
+        <li><strong>At the start (Embedding):</strong> Token ID → look up row in \(E\) → get the 960-number meaning vector</li>
+        <li><strong>At the end (LM Head):</strong> Meaning vector → multiply by \(E^T\) → get 32,768 vocabulary scores</li>
+      </ul>
+      <p>
+        Why does this work? The embedding converts <em>token → meaning</em>.
+        The LM head converts <em>meaning → token</em>. They're approximate
+        inverses of each other, so sharing the matrix makes sense.
+        This saves \(32768 \times 960 = 31.5\) million parameters that
+        would otherwise be wasted on a separate LM head.
+      </p>
+    </div>
+
+    <div class="callout" style="background:#fff8f0; border-left-color:#c0392b; margin:1.5rem 0;">
+      <div class="title">⟹ Want an even deeper walkthrough? Start from zero knowledge of logits</div>
+      <p style="margin:0.3rem 0 0;">
+        The <a href="docs/logits_eval_forward_guide.html" style="font-weight:700;">full study guide</a>
+        explains logits through 5 different perspectives (voting, geometry, information theory,
+        thermodynamics, and code) with step-by-step math and more examples.
+      </p>
+    </div>
+  </div>
+
+
+  <!-- ──── 9. GENERATION ──── -->
+  <div class="flow-step">
+    <div class="step-header">
+      <span class="step-num">9</span>
+      <span class="step-name">Generation — From Logits to Tokens</span>
+    </div>
+
+    <p class="desc">
+      During training, we use all T positions (each one predicts the next
+      token). But during generation, we only need <strong>one thing</strong>:
+      what token comes after everything we've seen so far?
+    </p>
+
+    <div class="shape-row">
+      <span class="shape">logits[:, -1, :]</span>
+      <span class="arrow">→</span>
+      <span class="shape">(B, 32768)</span>
+    </div>
+
+    <!-- ═══ Why Only the Last Position ═══ -->
+    <h3>Why Only the Last Position?</h3>
+
+    <p>
+      Think about reading a sentence: <strong>"The cat sat"</strong>.
+    </p>
+
+    <ul>
+      <li><strong>Position 0</strong> ("The") predicts token 1 ("cat").
+        But we <em>already know</em> the next word is "cat".</li>
+      <li><strong>Position 1</strong> ("cat") predicts token 2 ("sat").
+        We <em>already know</em> the next word is "sat".</li>
+      <li><strong>Position 2</strong> ("sat") predicts the word that comes
+        <strong>after</strong> "sat". This is the only one we don't know yet.</li>
+    </ul>
+
+    <p>
+      So we take <code>logits[:, -1, :]</code> — the logits at the
+      <strong>last position</strong> — and use those to predict
+      <strong>what comes next</strong>.
+    </p>
+
+    <!-- ═══ The Generation Loop ═══ -->
+    <h3>The Generation Loop — Predict, Append, Repeat</h3>
+
+    <p>Generation is a loop. At every step:</p>
+
+    <ol>
+      <li>Feed the entire sequence (original prompt + any new tokens) into the model</li>
+      <li>Look at the <strong>last position's</strong> logits</li>
+      <li>Apply temperature, top-k, softmax, and sample one token</li>
+      <li><strong>Append</strong> the new token to the sequence</li>
+      <li><strong>Repeat</strong> until we hit the desired length or the model says "stop"</li>
+    </ol>
+
+    <pre><span class="cm"># Step-by-step in code:</span>
+<span class="kw">for</span> _ <span class="kw">in</span> range(max_new_tokens):
+
+    <span class="cm"># 1. Run the model on everything we have so far</span>
+    logits = model(input_ids).logits              <span class="cm"># (B, T, 32768)</span>
+
+    <span class="cm"># 2. Take ONLY the last position's logits</span>
+    next_logits = logits[:, <span class="rd">-1</span>, :]               <span class="cm"># (B, 32768)</span>
+
+    <span class="cm"># 3. Temperature scaling (creativity dial)</span>
+    next_logits = next_logits / temperature        <span class="cm"># e.g. T=0.8</span>
+
+    <span class="cm"># 4. Top-k filtering (cut off bad options)</span>
+    top_k = <span class="sc">50</span>
+    values, _ = torch.topk(next_logits, top_k)
+    next_logits[next_logits &lt; values[:, -<span class="sc">1</span>:]] = float(<span class="rs">'-inf'</span>)
+
+    <span class="cm"># 5. Softmax → probabilities, then sample one token</span>
+    probs = F.softmax(next_logits, dim=-<span class="sc">1</span>)       <span class="cm"># (B, 32768)</span>
+    next_id = torch.multinomial(probs, <span class="sc">1</span>)          <span class="cm"># (B, 1)</span>
+
+    <span class="cm"># 6. Append the new token, go back to step 1</span>
+    input_ids = torch.cat([input_ids, next_id], dim=<span class="sc">1</span>)</pre>
+
+    <!-- ═══ SVG Diagram ═══ -->
+    <div class="svg-wrap">
+      <svg viewBox="0 0 860 340" xmlns="http://www.w3.org/2000/svg" style="font-family:'JetBrains Mono',monospace;">
+        <defs>
+          <marker id="arr4" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+            <polygon points="0 0, 8 3, 0 6" fill="#1a1a1a"/>
+          </marker>
+          <marker id="arr-red2" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+            <polygon points="0 0, 8 3, 0 6" fill="#e63946"/>
+          </marker>
+        </defs>
+
+        <text x="430" y="25" text-anchor="middle" font-size="13" font-weight="700" fill="#1a1a1a">Autoregressive generation: one new token per loop</text>
+
+        <!-- Prompt -->
+        <rect x="35" y="58" width="170" height="52" rx="5" fill="none" stroke="#1a1a1a" stroke-width="1.5"/>
+        <text x="120" y="80" text-anchor="middle" font-size="10" fill="#1a1a1a">input_ids</text>
+        <text x="120" y="98" text-anchor="middle" font-size="9" fill="#888">["The", "cat", "sat"]</text>
+
+        <line x1="205" y1="84" x2="255" y2="84" stroke="#1a1a1a" stroke-width="1.5" marker-end="url(#arr4)"/>
+
+        <!-- Model -->
+        <rect x="260" y="50" width="155" height="68" rx="5" fill="#fff0f0" stroke="#e63946" stroke-width="1.5"/>
+        <text x="337" y="76" text-anchor="middle" font-size="11" fill="#e63946" font-weight="700">FinalSLM</text>
+        <text x="337" y="94" text-anchor="middle" font-size="9" fill="#1a1a1a">full forward pass</text>
+        <text x="337" y="108" text-anchor="middle" font-size="9" fill="#888">(B,T) -> (B,T,V)</text>
+
+        <line x1="415" y1="84" x2="465" y2="84" stroke="#1a1a1a" stroke-width="1.5" marker-end="url(#arr4)"/>
+
+        <!-- Logits all positions -->
+        <rect x="470" y="50" width="170" height="68" rx="5" fill="none" stroke="#1a1a1a" stroke-width="1.5"/>
+        <text x="555" y="73" text-anchor="middle" font-size="10" fill="#1a1a1a">logits: (B,T,32768)</text>
+        <text x="555" y="91" text-anchor="middle" font-size="9" fill="#888">scores for every position</text>
+        <rect x="588" y="55" width="40" height="56" rx="3" fill="#fff0f0" stroke="#e63946" stroke-width="1.5"/>
+        <text x="608" y="87" text-anchor="middle" font-size="8" fill="#e63946">last</text>
+
+        <line x1="640" y1="84" x2="690" y2="84" stroke="#e63946" stroke-width="1.8" marker-end="url(#arr-red2)"/>
+
+        <!-- Last logits -->
+        <rect x="695" y="58" width="130" height="52" rx="5" fill="#fff0f0" stroke="#e63946" stroke-width="1.5"/>
+        <text x="760" y="79" text-anchor="middle" font-size="10" fill="#e63946">logits[:, -1, :]</text>
+        <text x="760" y="97" text-anchor="middle" font-size="9" fill="#1a1a1a">(B,32768)</text>
+
+        <!-- Sampling pipeline -->
+        <line x1="760" y1="110" x2="760" y2="145" stroke="#1a1a1a" stroke-width="1.5" marker-end="url(#arr4)"/>
+
+        <rect x="55" y="160" width="120" height="54" rx="5" fill="#fafafa" stroke="#ddd" stroke-width="1"/>
+        <text x="115" y="181" text-anchor="middle" font-size="10" fill="#555">1. Temperature</text>
+        <text x="115" y="198" text-anchor="middle" font-size="8" fill="#888">z = z / temp</text>
+
+        <line x1="175" y1="187" x2="220" y2="187" stroke="#1a1a1a" stroke-width="1.3" marker-end="url(#arr4)"/>
+
+        <rect x="225" y="160" width="120" height="54" rx="5" fill="#fafafa" stroke="#ddd" stroke-width="1"/>
+        <text x="285" y="181" text-anchor="middle" font-size="10" fill="#555">2. Top-k</text>
+        <text x="285" y="198" text-anchor="middle" font-size="8" fill="#888">keep best k</text>
+
+        <line x1="345" y1="187" x2="390" y2="187" stroke="#1a1a1a" stroke-width="1.3" marker-end="url(#arr4)"/>
+
+        <rect x="395" y="160" width="120" height="54" rx="5" fill="#fafafa" stroke="#ddd" stroke-width="1"/>
+        <text x="455" y="181" text-anchor="middle" font-size="10" fill="#555">3. Softmax</text>
+        <text x="455" y="198" text-anchor="middle" font-size="8" fill="#888">scores -> probs</text>
+
+        <line x1="515" y1="187" x2="560" y2="187" stroke="#1a1a1a" stroke-width="1.3" marker-end="url(#arr4)"/>
+
+        <rect x="565" y="160" width="120" height="54" rx="5" fill="#fafafa" stroke="#ddd" stroke-width="1"/>
+        <text x="625" y="181" text-anchor="middle" font-size="10" fill="#555">4. Sample</text>
+        <text x="625" y="198" text-anchor="middle" font-size="8" fill="#888">pick next_id</text>
+
+        <line x1="685" y1="187" x2="730" y2="187" stroke="#1a1a1a" stroke-width="1.3" marker-end="url(#arr4)"/>
+
+        <rect x="735" y="160" width="95" height="54" rx="5" fill="#fff0f0" stroke="#e63946" stroke-width="1.5"/>
+        <text x="782" y="181" text-anchor="middle" font-size="10" fill="#e63946">5. Append</text>
+        <text x="782" y="198" text-anchor="middle" font-size="8" fill="#1a1a1a">T -> T+1</text>
+
+        <!-- Loop path -->
+        <path d="M 782 214 C 782 290, 120 290, 120 112" fill="none" stroke="#e63946" stroke-width="1.6" stroke-dasharray="5,3" marker-end="url(#arr-red2)"/>
+        <text x="400" y="282" text-anchor="middle" font-size="10" fill="#e63946">new sequence goes back into the model; repeat until max_new_tokens or EOS</text>
+
+        <!-- Note -->
+        <rect x="55" y="235" width="775" height="28" rx="5" fill="#fafafa" stroke="#ddd" stroke-width="1"/>
+        <text x="442" y="254" text-anchor="middle" font-size="10" fill="#555">Training predicts every position in parallel. Generation uses only the last position because that is the unknown next token.</text>
+      </svg>
+      <div class="svg-caption">Figure 6: The generation loop — take last logits, apply temperature + top-k, softmax, sample, append, repeat.</div>
+    </div>
+
+    <div class="plain-card">
+      <div class="label">Training vs Generation</div>
+      <p>
+        During training, the model predicts every position in parallel because
+        the whole sequence is already known. During generation, only the next
+        token is unknown, so we use only <code>logits[:, -1, :]</code>. After
+        sampling one token, that token becomes part of the input, so the sequence
+        length grows from \(T\) to \(T+1\).
+      </p>
+    </div>
+
+    <p>
+      The generation math is the same LM-head math as training, but used one
+      step at a time. For the current final position, the model computes logits
+      \(z \in \mathbb{R}^{32768}\). Temperature changes those logits to
+      \(z / \tau\). Top-k sets all but the largest \(k\) logits to \(-\infty\).
+      Softmax turns the remaining scores into probabilities. Sampling picks one
+      token ID from that probability distribution.
+    </p>
+
+    <pre># One generation step as math-shaped code:
+z = logits[:, -1, :]          # (B, vocab)
+z = z / temperature           # sharpen or flatten the distribution
+z[not_in_top_k] = -inf        # remove low-quality candidates
+p = softmax(z, dim=-1)        # probabilities over vocabulary
+next_id = sample(p)           # (B, 1)
+input_ids = concat(input_ids, next_id)</pre>
+
+    <!-- ═══ Temperature Explained ═══ -->
+    <h3>Understanding Temperature — The Creativity Dial</h3>
+
+    <p>
+      Temperature controls <strong>how much randomness</strong> the model
+      uses when choosing the next token. Here's what it does:
+    </p>
+
+    <table>
+      <tr><th>Temperature</th><th>What it does to the scores</th><th>How the model behaves</th></tr>
+      <tr>
+        <td><strong>Low (0.1 — 0.5)</strong></td>
+        <td>Dividing by a small number makes the big logits HUGE
+          and the small logits TINY. The gaps get wider.</td>
+        <td><strong>Safe, repetitive, predictable.</strong>
+          Model always picks the most obvious token.
+          Like giving the textbook answer.</td>
+      </tr>
+      <tr>
+        <td><strong>Medium (0.7 — 1.0)</strong></td>
+        <td>Normal. Whatever the model learned during training.</td>
+        <td><strong>Natural and balanced.</strong>
+          Model sounds like a normal person.
+          Default setting for most uses.</td>
+      </tr>
+      <tr>
+        <td><strong>High (1.2 — 2.0)</strong></td>
+        <td>Dividing by a bigger number makes all logits closer
+          together. Low-probability tokens get a real chance.</td>
+        <td><strong>Creative, surprising, sometimes nonsense.</strong>
+          Model takes risks. Good for brainstorming.
+          May produce garbage.</td>
+      </tr>
+    </table>
+
+    <div style="border:1px solid #ddd; border-radius:6px; padding:1rem 1.4rem; margin:1.2rem 0; background:#fff;">
+      <p style="font-weight:800; font-size:0.85rem; text-transform:uppercase; color:#888; letter-spacing:0.08em; margin:0 0 0.5rem 0;">▸ Simple Analogy — The Creativity Dial</p>
+      <p style="margin:0;">
+        <strong>Low temp (0.3):</strong> The model plays it safe. It says the
+        most predictable thing every time. Like answering an exam — you give
+        the standard correct answer.<br><br>
+        <strong>High temp (1.5):</strong> The model gets creative. It might
+        say something surprising. Like brainstorming ideas in a group —
+        some are brilliant, some are weird.<br><br>
+        <strong>You choose the temperature</strong> based on what you need:
+        facts and accuracy → low temp. Creativity and variety → high temp.
+      </p>
+    </div>
+
+    <div style="border:1px solid #ddd; border-radius:6px; padding:1rem 1.4rem; margin:1.2rem 0; background:#fff;">
+      <p style="font-weight:800; font-size:0.85rem; text-transform:uppercase; color:#888; letter-spacing:0.08em; margin:0 0 0.5rem 0;">▸ How Temperature Changes the Math</p>
+      <p style="margin:0;">
+        Softmax with temperature: \(p_i = \dfrac{e^{z_i / T}}{\sum_j e^{z_j / T}}\).
+        Dividing by \(T\) before exponentiating. When \(T\) is small (e.g. 0.3),
+        \(z_i / T\) becomes a bigger number → the exponent widens the gap between
+        high and low tokens → the top token gets almost all the probability mass.
+        When \(T\) is large (e.g. 1.5), \(z_i / T\) shrinks → all probabilities
+        become more equal → more randomness in choosing.
+      </p>
+    </div>
+
+    <!-- ═══ Top-K Explained ═══ -->
+    <h3>Understanding Top-K — Cutting Off Bad Options</h3>
+
+    <p>
+      After temperature scaling, we can do <strong>top-k filtering</strong>:
+      we look at all 32,768 tokens, keep only the top \(k\) with the highest
+      logits, and set the rest to \(-\infty\) (they become impossible to pick).
+    </p>
+
+    <p>
+      <strong>Why?</strong> Even with temperature, some truly weird tokens
+      might sneak through. Top-k chops them off entirely. With top-k=50,
+      the model only considers the 50 most likely tokens and ignores the
+      other 32,718. This prevents the model from randomly picking a byte
+      value or a rare token that doesn't make sense.
+    </p>
+
+    <p>
+      <strong>Common values:</strong> k=40 to k=100. Lower = safer, higher = more variety.
+    </p>
+
+    <!-- ═══ Sampling Explained ═══ -->
+    <h3>Understanding Sampling — Why We Don't Always Pick #1</h3>
+
+    <p>
+      After softmax, we have a probability distribution over 32,768 tokens.
+      We could just pick the token with the <strong>highest</strong>
+      probability (called <strong>greedy decoding</strong> or
+      <strong>argmax</strong>).
+    </p>
+
+    <p>
+      <strong>But greedy decoding makes repetitive, boring text.</strong>
+      The model always picks the single most obvious word, which leads to
+      loops like "I love love love love love..."
+    </p>
+
+    <p>
+      Instead, we <strong>sample</strong> — we roll a 32,768-sided
+      weighted die. The die is weighted by the probabilities:
+    </p>
+
+    <ul>
+      <li>The most likely token has the <strong>best chance</strong> of being picked (but isn't guaranteed)</li>
+      <li>The second most likely has a <strong>decent chance</strong></li>
+      <li>The 50th most likely has a <strong>small chance</strong></li>
+      <li>The 32,768th most likely has <strong>virtually no chance</strong> (especially with top-k)</li>
+    </ul>
+
+    <p>
+      This makes the generated text <strong>natural and varied</strong>,
+      just like how humans don't always say the single most predictable
+      word. Sometimes we pick the second-best word for variety.
+    </p>
+
+    <!-- ═══ Concrete Generation Example ═══ -->
+    <h3>Concrete Example — "The cat sat" Generation</h3>
+
+    <pre><span class="cm"># Starting with prompt "The cat sat" ([464, 3797, 6471]):</span>
+<span class="cm"># Temperature = 0.8, top-k = 50</span>
+
+Step 0: input = ["The", "cat", "sat"]
+        logits at last position → top candidates:
+          "on"     (28% probability)
+          "the"    (19%)
+          "."      (6%)
+          "quietly" (4%)
+          ...
+        ← sampled: "on" <span class="cm">(most likely, but not guaranteed)</span>
+
+Step 1: input = ["The", "cat", "sat", "on"]
+        ← sampled: "the"
+
+Step 2: input = ["The", "cat", "sat", "on", "the"]
+        ← sampled: "mat"
+
+Step 3: input = ["The", "cat", "sat", "on", "the", "mat"]
+        ← sampled: "."
+
+Step 4: input = ["The", "cat", "sat", "on", "the", "mat", "."]
+        ← model outputs &lt;eos&gt; (end-of-sequence token)
+        → generation stops
+
+<span class="cm"># Final output: "The cat sat on the mat."</span></pre>
+
+    <div class="callout">
+      <div class="title">⟹ Quick Summary — The Generation Pipeline</div>
+      <p>
+        <strong>Logits</strong> (raw scores) → <strong>Temperature</strong>
+        (creativity dial) → <strong>Top-K</strong> (cut weird options) →
+        <strong>Softmax</strong> (scores → probabilities) →
+        <strong>Multinomial sample</strong> (roll the weighted die) →
+        <strong>One token</strong>. Append and repeat.
+      </p>
+    </div>
+
+    <div class="callout" style="background:#fff8f0; border-left-color:#c0392b; margin:1.5rem 0;">
+      <div class="title">⟹ Want more? Full study guide covers temperature, top-k, sampling in depth</div>
+      <p style="margin:0.3rem 0 0;">
+        The <a href="docs/logits_eval_forward_guide.html" style="font-weight:700;">complete generation guide</a>
+        explains temperature through physics (Boltzmann distribution), top-k through information theory,
+        and sampling through gambling analogies — with step-by-step code and math.
+      </p>
+    </div>
+  </div>
+
+
+  <!-- ═══════════════════════ COMPLETE DIMENSION TRACE ═══════════════════════ -->
+  <h2>Complete Dimension Trace</h2>
+  <p>
+    Here's every shape change for our example <strong>"The cat sat"</strong> with B=1, T=3.
+    This is the single most important table on this page.
+  </p>
+
+  <div style="overflow-x:auto;">
+    <table class="trace-table">
+      <thead>
+        <tr>
+          <th style="width:18%">Step</th>
+          <th style="width:20%">Operation</th>
+          <th style="width:22%">Input Shape</th>
+          <th style="width:22%">Output Shape</th>
+          <th style="width:18%">What changed</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>1</td>
+          <td>Token IDs</td>
+          <td>[464, 3797, 6471]</td>
+          <td>(1, 3)</td>
+          <td>Raw token indices</td>
+        </tr>
+        <tr>
+          <td>2</td>
+          <td><strong>Embedding</strong></td>
+          <td>(1, 3)</td>
+          <td><strong>(1, 3, 960)</strong></td>
+          <td>IDs → dense vectors. 960 features per token</td>
+        </tr>
+        <tr>
+          <td>3</td>
+          <td>Per layer: <strong>RMSNorm</strong></td>
+          <td>(1, 3, 960)</td>
+          <td>(1, 3, 960)</td>
+          <td>Rescaled to RMS≈1. Same shape, different values.</td>
+        </tr>
+        <tr>
+          <td>4</td>
+          <td>— QKV Projection</td>
+          <td>(1, 3, 960)</td>
+          <td>(1, 3, 2880)</td>
+          <td>960 → 2880 (3× for Q, K, V fused)</td>
+        </tr>
+        <tr>
+          <td>5</td>
+          <td>— Split Q, K, V</td>
+          <td>(1, 3, 2880)</td>
+          <td>3 × (1, 3, 960)</td>
+          <td>Split into 3 separate tensors</td>
+        </tr>
+        <tr>
+          <td>6</td>
+          <td>— Reshape into heads</td>
+          <td>(1, 3, 960)</td>
+          <td><strong>(1, 15, 3, 64)</strong></td>
+          <td>960 → 15 heads × 64 dims each</td>
+        </tr>
+        <tr>
+          <td>7</td>
+          <td>— <strong>RoPE</strong></td>
+          <td>(1, 15, 3, 64)</td>
+          <td>(1, 15, 3, 64)</td>
+          <td>Same shape, vectors rotated by position angle</td>
+        </tr>
+        <tr>
+          <td>8</td>
+          <td>— Scores Q@K^T</td>
+          <td>Q,K: (1, 15, 3, 64)</td>
+          <td><strong>(1, 15, 3, 3)</strong></td>
+          <td>Token × token attention matrix per head</td>
+        </tr>
+        <tr>
+          <td>9</td>
+          <td>— Causal mask</td>
+          <td>(1, 15, 3, 3)</td>
+          <td>(1, 15, 3, 3)</td>
+          <td>Upper triangle → -inf (no future peeking)</td>
+        </tr>
+        <tr>
+          <td>10</td>
+          <td>— Softmax + @V</td>
+          <td>(1, 15, 3, 64)</td>
+          <td>(1, 15, 3, 64)</td>
+          <td>Weighted sum of values</td>
+        </tr>
+        <tr>
+          <td>11</td>
+          <td>— Concat heads</td>
+          <td>(1, 15, 3, 64)</td>
+          <td>(1, 3, 960)</td>
+          <td>15 heads → full d_model</td>
+        </tr>
+        <tr>
+          <td>12</td>
+          <td>— Output projection</td>
+          <td>(1, 3, 960)</td>
+          <td>(1, 3, 960)</td>
+          <td>Mix across heads</td>
+        </tr>
+        <tr>
+          <td>13</td>
+          <td>+ <strong>Residual add</strong></td>
+          <td>(1, 3, 960)</td>
+          <td>(1, 3, 960)</td>
+          <td>x = x + attn_output</td>
+        </tr>
+        <tr>
+          <td>14</td>
+          <td>— <strong>SwiGLU MLP</strong></td>
+          <td>(1, 3, 960)</td>
+          <td>(1, 3, 960)</td>
+          <td>Inside: 960 → 2560 → gate+up → 2560 → down → 960</td>
+        </tr>
+        <tr>
+          <td>15</td>
+          <td>+ <strong>Residual add</strong></td>
+          <td>(1, 3, 960)</td>
+          <td>(1, 3, 960)</td>
+          <td>x = x + mlp_output</td>
+        </tr>
+        <tr>
+          <td style="background:#fff0f0; font-weight:700;">16</td>
+          <td style="background:#fff0f0;"><strong>× 30 layers</strong></td>
+          <td style="background:#fff0f0;">(1, 3, 960)</td>
+          <td style="background:#fff0f0;"><strong>(1, 3, 960)</strong></td>
+          <td style="background:#fff0f0;">Steps 3–15 repeated 30 times</td>
+        </tr>
+        <tr>
+          <td>17</td>
+          <td><strong>Final RMSNorm</strong></td>
+          <td>(1, 3, 960)</td>
+          <td>(1, 3, 960)</td>
+          <td>Stabilize before output</td>
+        </tr>
+        <tr>
+          <td>18</td>
+          <td><strong>LM Head</strong></td>
+          <td>(1, 3, 960)</td>
+          <td><strong>(1, 3, 32768)</strong></td>
+          <td>960 → vocab_size. Scores for every token.</td>
+        </tr>
+        <tr>
+          <td style="background:#fff0f0;">19</td>
+          <td style="background:#fff0f0;"><strong>Generation</strong></td>
+          <td style="background:#fff0f0;">(1, 3, 32768)</td>
+          <td style="background:#fff0f0;"><strong>logits[:, -1, :] → (1, 32768)</strong></td>
+          <td style="background:#fff0f0;">Take last position only</td>
+        </tr>
+        <tr>
+          <td style="background:#fff0f0;">20</td>
+          <td style="background:#fff0f0;"><strong>Sample</strong></td>
+          <td style="background:#fff0f0;">(1, 32768)</td>
+          <td style="background:#fff0f0;"><strong>next_id: (1, 1)</strong></td>
+          <td style="background:#fff0f0;">Probability → multinomial sample → one token</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout">
+    <div class="title">⟹ The Big Pattern</div>
+    <p>
+      <strong>Steps that change shape:</strong> 1→2 (embedding), 4 (QKV expansion),
+      6 (reshape heads), 8 (T×T scores), 11 (concat heads), 18 (LM head projection).
+      Everything else is a <strong>same-shape transformation</strong> that refines
+      the content without changing the structure.
+    </p>
+  </div>
+
+
+  <!-- ═══════════════════════ KEY TAKEAWAYS ═══════════════════════ -->
+  <h2>Key Takeaways</h2>
+
+  <ol>
+    <li>
+      <strong>The residual stream is invariant.</strong> Its shape \((B, T, 960)\)
+      never changes from embedding to final norm. All 30 layers read from and
+      write to it without altering its dimensions.
+    </li>
+    <li>
+      <strong>Attention = mixing across positions.</strong> The only place where
+      the T dimension interacts with itself is the \(T \times T\) attention matrix.
+      Each head computes its own attention pattern.
+    </li>
+    <li>
+      <strong>MLP = mixing across features.</strong> The MLP operates on each
+      position independently. It expands to a wider space (2560), applies a
+      gated nonlinearity, and projects back to 960. No cross-position communication.
+    </li>
+    <li>
+      <strong>Two shape changes:</strong> At the start (embedding: IDs → vectors)
+      and at the end (LM head: vectors → vocab scores). Everything in between
+      is \((B, T, 960) \rightarrow (B, T, 960)\).
+    </li>
+    <li>
+      <strong>Heads = parallel attention views.</strong> \(d_{\text{model}}\) is
+      split into 15 heads of 64 dimensions. Each head runs independent attention.
+      The output projection lets the model recombine them.
+    </li>
+    <li>
+      <strong>RoPE encodes position without changing shape.</strong> It rotates
+      Q and K vectors so the dot product encodes relative distance. Applied only
+      to Q and K, not V.
+    </li>
+    <li>
+      <strong>Pre-norm + residual = trainable depth.</strong> Normalizing before
+      each sublayer and adding skip connections lets gradients flow through 30 layers
+      without vanishing.
+    </li>
+    <li>
+      <strong>Generation uses only the last position.</strong> During inference,
+      we take logits[:, -1, :], apply temperature/top-k, softmax, and sample one token.
+      That token is appended and the process repeats.
+    </li>
+  </ol>
+
+
+  <!-- ═══════════════════════ RELATED GUIDES ═══════════════════════ -->
+  <div style="margin-top: 3rem; padding-top: 2rem; border-top: 1px solid #ddd; font-size: 0.85rem;">
+    <strong style="color: #1a1a1a;">Related guides</strong>
+    <ul style="list-style: none; padding: 0; margin: 0.5rem 0 0;">
+      <li><a href="docs/sft_vs_grpo.html" target="_blank" style="color:#e63946; text-decoration:underline;">SFT ∵ GRPO</a> — Loss mechanics, gradient geometry, and the actual mathematical difference.</li>
+    </ul>
+  </div>
+
+  <!-- ═══════════════════════ FOOTER ═══════════════════════ -->
+  <footer>
+    FinalSLM — 363M parameter decoder-only transformer built from scratch.<br>
+    <span style="color:#999;">d_model=960, layers=30, heads=15, head_dim=64, vocab=32768</span>
+  </footer>
+
+</div>
+
+<script>
+  // Auto-render KaTeX when the page loads
+  document.addEventListener("DOMContentLoaded", function() {
+    renderMathInElement(document.body, {
+      delimiters: [
+        {left: '\\[', right: '\\]', display: true},
+        {left: '\\(', right: '\\)', display: false}
+      ],
+      throwOnError: false
+    });
+  });
+</script>
+
+</body>
+</html>
