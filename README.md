@@ -23,12 +23,19 @@ The goal isn't a leaderboard score. The goal is **ownership**: when something wo
 The full forward pass:
 
 $$
-\begin{aligned}
-x_0 &= \text{Embed}(\text{input\_ids}) && (B, T) \to (B, T, 960)\\[4pt]
-x_{\ell+1} &= x_\ell + \text{DecoderLayer}(x_\ell) && \ell = 0, \dots, 29\\[4pt]
-h &= \text{RMSNorm}(x_{30})\\[4pt]
-\text{logits} &= h \cdot E^\top && (B, T, 960) \to (B, T, 32768)
-\end{aligned}
+x_0 = \text{Embed}(\text{input\_ids}) \qquad (B, T) \to (B, T, 960)
+$$
+
+$$
+x_{\ell+1} = x_\ell + \text{DecoderLayer}(x_\ell) \qquad \ell = 0, \dots, 29
+$$
+
+$$
+h = \text{RMSNorm}(x_{30})
+$$
+
+$$
+\text{logits} = h \cdot E^\top \qquad (B, T, 960) \to (B, T, 32768)
 $$
 
 **RMSNorm** — normalization without centering:
@@ -74,7 +81,7 @@ AdamW ($\beta_1=0.9$, $\beta_2=0.95$, wd=0.1), linear warmup → cosine decay. 1
 Same cross-entropy, now on instruction-response pairs. The gradient pushes mass toward a fixed demonstrated token at every position:
 
 $$
-\mathcal{L}_{\text{SFT}} = -\sum_t \log \pi_\theta(y^*_t \mid x, y^*_{<t})
+\mathcal{L}_{\text{SFT}} = -\sum_t \log \pi_\theta(y^{*}_t \mid x, y^{*}_{<t})
 $$
 
 SFT can only reinforce "matches this string." No mechanism to discover strategies that correlate with success.
