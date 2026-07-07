@@ -165,5 +165,5 @@ python train/pretrain.py           # start training
 </p>
 
 <p align="center">
-  <sub><a href="https://github.com/madhvantyagi">@madhvantyagi</a> · · 2026</sub>
+  <sub><a href="https://github.com/madhvantyagi">@madhvantyagi</a> · 2026</sub>
 </p>
