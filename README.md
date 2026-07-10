@@ -1,169 +1,77 @@
-# Owning Your Language Model
+<p align="center">
+  <img src="assets/zero.png" alt="Zero — the current model inside Owning Your Language Model" width="100%" />
+</p>
 
-**Build, train, align, merge, and reason — your own SLM from scratch.**
+<h1 align="center">Owning Your Language Model</h1>
 
-Architecture → Pretraining → SFT → LoRA → Frankenmerger → GRPO
+<p align="center">
+  <strong>Build it. Train it. Align it. Understand it.</strong>
+</p>
 
-Everything implemented in PyTorch. Every weight update understood. Every gradient accounted for.
+Owning Your Language Model is a hands-on repository for learning how language models are built, trained, aligned, and evaluated. It brings together from-scratch architecture work, dataset design, supervised fine-tuning, reinforcement learning, and practical experiments.
 
----
-
-## The Motive
-
-Most people treat language models as black boxes. Call API → get text. The internals are a mystery.
-
-This project tears it open. We write the tokenizer, the attention mechanism, the training loop, the loss functions, the generation code. Then we take it further — parameter-efficient fine-tuning, model merging, online reinforcement learning.
-
-The goal isn't a leaderboard score. The goal is **ownership**: when something works or fails, you know exactly why.
+This repository is not limited to one model. **Zero is the model currently in focus.**
 
 ---
 
-## Architecture — Decoder-Only Transformer
+## Meet Zero
 
-The full forward pass:
+Zero is the name I gave the current model during training. It starts from **Qwen3 8B** and is being shaped into a focused reasoning and coding model with its own data mixture, training pipeline, and identity.
 
-$$
-x_0 = \text{Embed}(\text{input ids}) \qquad (B, T) \to (B, T, 960)
-$$
+| | |
+| --- | --- |
+| **Base model** | Qwen3 8B |
+| **Focus** | Reasoning, coding, and physics |
+| **Training** | SFT → GSPO |
+| **Status** | Active development |
 
-$$
-x_{\ell+1} = x_\ell + \text{DecoderLayer}(x_\ell) \qquad \ell = 0, \dots, 29
-$$
+Zero is one product of this repository—not the boundary of it. Future models, training methods, and experiments will live alongside it.
 
-$$
-h = \text{RMSNorm}(x_{30})
-$$
+## How Zero Is Trained
 
-$$
-\text{logits} = h \cdot E^\top \qquad (B, T, 960) \to (B, T, 32768)
-$$
+### 1. Supervised Fine-Tuning
 
-**RMSNorm** — normalization without centering:
+SFT teaches Zero how strong reasoning and answers should look:
 
 $$
-\text{RMSNorm}(x) = \frac{x}{\sqrt{\frac{1}{d}\sum x_i^2 + \epsilon}} \cdot \gamma
+\mathcal{L}_{\mathrm{SFT}} = -\sum_t \log p_\theta(y_t \mid x, y_{<t})
 $$
 
-**RoPE** — encode position by rotating Q/K pairs:
+A primary source of reasoning style is a curated set of **Claude Opus 4.7-generated coding and physics traces**, blended with competitive programming, math, general reasoning, and custom Zero identity data.
+
+### 2. Group Sequence Policy Optimization
+
+GSPO follows SFT using separate reward-oriented datasets. It compares groups of generated solutions and strengthens complete sequences that earn better scores:
 
 $$
-\begin{pmatrix} Q'_{2i} \\ Q'_{2i+1} \end{pmatrix} = \begin{pmatrix} \cos(p\theta_i) & -\sin(p\theta_i) \\ \sin(p\theta_i) & \cos(p\theta_i) \end{pmatrix} \begin{pmatrix} Q_{2i} \\ Q_{2i+1} \end{pmatrix}
+A_i = \frac{R_i - \mu_R}{\sigma_R + \epsilon}
 $$
 
-**Multi-Head Attention** — 15 heads, head_dim=64, causal mask:
+SFT gives Zero a strong starting behavior. GSPO pushes it toward answers that are not only well written, but more useful and correct.
 
-$$
-\text{out} = \text{softmax}\!\left(\frac{QK^\top}{\sqrt{64}} + \text{mask}\right) V
-$$
+## What This Repository Covers
 
-**SwiGLU MLP** — gated activation, per-token processing:
+- Decoder-only Transformer architecture built in PyTorch
+- Tokenization, pretraining, and generation
+- Dataset curation and supervised fine-tuning
+- LoRA and parameter-efficient training
+- GSPO, reward design, and model alignment
+- Evaluation, model merging, and training experiments
 
-$$
-\text{SwiGLU}(x) = W_{\text{down}}(\text{silu}(W_{\text{gate}} x) \odot W_{\text{up}} x)
-$$
+The from-scratch implementation currently includes a **363M-parameter Transformer** with RMSNorm, RoPE, multi-head attention, SwiGLU, and tied embeddings. Explore it in [`SLM_Architecture`](SLM_Architecture/).
 
----
-
-## Pretraining
-
-Next-token prediction on raw text, code, and math. Data streamed from FineWeb-edu, OpenWebMath, StarCoderData, packed into 2049-token blocks.
-
-$$
-\mathcal{L}_{\text{pretrain}} = -\frac{1}{BT}\sum_{b,t} \log \pi_\theta(y_{b,t} \mid x_{b,<t})
-$$
-
-AdamW ($\beta_1=0.9$, $\beta_2=0.95$, wd=0.1), linear warmup → cosine decay. 15B tokens at 363M params.
-
----
-
-## SFT — Supervised Fine-Tuning
-
-Same cross-entropy, now on instruction-response pairs. The gradient pushes mass toward a fixed demonstrated token at every position:
-
-$$
-\mathcal{L}_{\text{SFT}} = -\sum_t \log \pi_\theta(y^{\ast}_t \mid x, y^{\ast}_{<t})
-$$
-
-SFT can only reinforce "matches this string." No mechanism to discover strategies that correlate with success.
-
----
-
-## LoRA — Low-Rank Adaptation
-
-Freeze base weights, insert trainable rank-$r$ decompositions into attention projections:
-
-$$
-h = W_0 x + BA x \qquad B \in \mathbb{R}^{d \times r}, \; A \in \mathbb{R}^{r \times k}
-$$
-
-The gradient through LoRA:
-
-$$
-\frac{\partial \mathcal{L}}{\partial A} = B^\top \cdot \frac{\partial \mathcal{L}}{\partial h} \cdot x^\top
-$$
-
-Fine-tune 363M models on consumer GPUs (RTX 4090) at < 1% of full parameter cost.
-
----
-
-## Frankenmerger — Model Merging
-
-Combine multiple fine-tuned models by merging in weight space. No additional training.
-
-**Task arithmetic** — treat each fine-tuned model as a task vector $\tau_i = \theta_i - \theta_{\text{base}}$:
-
-$$
-\theta_{\text{merged}} = \theta_{\text{base}} + \sum_i \alpha_i \tau_i
-$$
-
-**TIES-Merging** resolves sign conflicts: trim low-magnitude values, elect majority sign per parameter, average only agreeing parameters.
-
-Fine-tuned models live in the same loss basin — linear interpolation stays in the basin while combining capabilities.
-
----
-
-## GRPO — Group Relative Policy Optimization
-
-Sample $G$ completions per prompt, score with a verifier, compute group-relative advantage:
-
-$$
-A_i = \frac{R_i - \mu_{\text{group}}}{\sigma_{\text{group}}}
-$$
-
-Clipped policy gradient with importance weighting and KL regularization:
-
-$$
-\mathcal{L}_{\text{GRPO}} = -\frac{1}{G}\sum_{i,t} \min\!\left(r_t(\theta) A_i,\; \text{clip}(r_t(\theta), 1-\varepsilon, 1+\varepsilon) A_i\right) - \beta \cdot \text{KL}(\pi_\theta \parallel \pi_{\text{ref}})
-$$
-
-The fixed point is a Boltzmann tilting of the reference policy by reward:
-
-$$
-\pi^\ast(y \mid x) \propto \pi_{\text{ref}}(y \mid x) \cdot \exp(R(y) / \beta)
-$$
-
-Trajectories with above-average reward get exponentially amplified — regardless of whether they existed in any SFT dataset. This is how emergent chain-of-thought and self-correction arise.
-
----
-
-## Getting Started
+## Start From Scratch
 
 ```bash
 git clone https://github.com/madhvantyagi/Owning-Language-model.git
 cd Owning-Language-model/SLM_Architecture
 pip install -r requirements.txt
-python tokenizer/train_tokenizer.py
-python model/slm_model.py          # verify forward pass
-python train/pretrain.py           # start training
+python model/slm_model.py
 ```
 
 ---
 
 <p align="center">
-  <strong>Every weight we initialize, we train.</strong><br>
-  <strong>Every gradient we backpropagate, we understand.</strong>
-</p>
-
-<p align="center">
-  <sub><a href="https://github.com/madhvantyagi">@madhvantyagi</a> · 2026</sub>
+  <strong>Own the pipeline—not just the output.</strong><br />
+  <sub>Built by <a href="https://github.com/madhvantyagi">@madhvantyagi</a></sub>
 </p>
