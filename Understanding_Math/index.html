@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <!-- 
+        Index / Landing page for the Understanding Math study series.
+        Provides navigation links to all math deep-dive guides:
+        SFT Math, SFT Weight Updates, LoRA/QLoRA, and GRPO.
+    -->
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mathematical Study Index</title>
+    <style>
+        :root {
+            --bg-color: #faf9f6;
+            --text-color: #111111;
+            --accent-red: #c92a2a;
+            --border-color: #d1cfc7;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+            line-height: 1.6;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+
+        header {
+            border-bottom: 2px solid var(--text-color);
+            padding-bottom: 20px;
+            margin-bottom: 40px;
+        }
+
+        h1 {
+            font-size: 24px;
+            margin: 0 0 10px 0;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        ul {
+            list-style-type: square;
+            padding-left: 20px;
+        }
+
+        li {
+            margin-bottom: 15px;
+            font-size: 15px;
+        }
+
+        a {
+            color: var(--accent-red);
+            text-decoration: none;
+            border-bottom: 1px dashed var(--accent-red);
+            font-weight: bold;
+        }
+
+        a:hover {
+            border-bottom: 1px solid var(--accent-red);
+        }
+    </style>
+</head>
+<body>
+
+<header>
+    <h1>Mathematical Study Portal</h1>
+    <p>Minimalist LaTeX-styled math representations for the Jackrong LLM Fine-tuning Guide.</p>
+</header>
+
+<main>
+    <h2>Available Guides</h2>
+    <ul>
+        <li>
+            <a href="sft_math.html">Supervised Fine-Tuning (SFT) Math</a>
+            <br>
+            <span>Autoregressive sequence factorization, Softmax derivation, log-likelihood, and gradient backpropagation updates. Includes an interactive logit-to-gradient simulation.</span>
+        </li>
+        <li>
+            <a href="sft_weight_updates.html">SFT Weight Updates & First Principles</a>
+            <br>
+            <span>Understanding how gradients on logits geometrically and mathematically update the un-embedding matrix, and how backpropagation routes signals through the entire neural network.</span>
+        </li>
+        <li>
+            <a href="lora_qlora_math.html">The Mathematics of LoRA &amp; QLoRA</a>
+            <br>
+            <span>A deep dive into how intrinsic dimension, matrix factorization, and NF4 quantization solve the VRAM crisis.</span>
+        </li>
+        <li>
+            <a href="grpo_math.html">The Mathematics of GRPO</a>
+            <br>
+            <span>Group Relative Policy Optimization — from why PPO's critic is a bottleneck to how DeepSeek eliminated it, with a fully worked dry run. Includes group advantage estimation, KL unbiased estimator, asymmetric clipping, and per-token loss computation with concrete numbers.</span>
+        </li>
+    </ul>
+</main>
+
+</body>
+</html>

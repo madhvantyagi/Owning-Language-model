@@ -1,0 +1,932 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <!-- 
+        Comprehensive mathematical deep-dive into GRPO (Group Relative Policy Optimization).
+        Covers: problem motivation, PPO recap, critic elimination insight, group advantage
+        estimation, full objective with clipping & KL penalty, a complete dry run with
+        concrete numbers, and limitations. Uses KaTeX for math rendering.
+    -->
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Mathematics of GRPO — Group Relative Policy Optimization</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <style>
+        :root {
+            --bg-color: #ffffff;
+            --text-color: #111111;
+            --red: #c92a2a;
+            --red-dim: #a51e1e;
+            --red-light: #fce4e4;
+            --border-color: #d1cfc7;
+            --code-bg: #f5f3f0;
+            --highlight-bg: #fff3e0;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+            line-height: 1.7;
+            max-width: 880px;
+            margin: 0 auto;
+            padding: 30px 20px 80px 20px;
+            font-size: 14px;
+        }
+
+        h1, h2, h3, h4 {
+            color: var(--red);
+            font-weight: 700;
+            letter-spacing: -0.3px;
+        }
+
+        h1 {
+            font-size: 28px;
+            border-bottom: 2px solid var(--red);
+            padding-bottom: 12px;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+        }
+
+        h2 {
+            font-size: 20px;
+            margin-top: 48px;
+            margin-bottom: 16px;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 6px;
+        }
+
+        h3 {
+            font-size: 16px;
+            margin-top: 32px;
+            margin-bottom: 10px;
+        }
+
+        p, li {
+            color: var(--text-color);
+            line-height: 1.8;
+        }
+
+        a {
+            color: var(--red);
+            text-decoration: none;
+            border-bottom: 1px dashed var(--red);
+        }
+
+        a:hover {
+            border-bottom: 1px solid var(--red);
+        }
+
+        .subtitle {
+            color: #555;
+            font-size: 13px;
+            margin-bottom: 32px;
+        }
+
+        .callout {
+            background: var(--red-light);
+            border-left: 4px solid var(--red);
+            padding: 12px 18px;
+            margin: 24px 0;
+            border-radius: 2px;
+            font-size: 13px;
+        }
+
+        .callout strong {
+            color: var(--red);
+        }
+
+        .proof-block {
+            background: #faf6f0;
+            border-left: 4px solid #8b7355;
+            padding: 12px 18px;
+            margin: 20px 0;
+            border-radius: 2px;
+            font-size: 13px;
+        }
+
+        .dry-run {
+            background: #f8f6ff;
+            border-left: 4px solid #5c4db2;
+            padding: 14px 18px;
+            margin: 24px 0;
+            border-radius: 2px;
+            font-size: 13px;
+            overflow-x: auto;
+        }
+
+        .dry-run strong {
+            color: #5c4db2;
+        }
+
+        code {
+            background: var(--code-bg);
+            padding: 2px 6px;
+            border-radius: 2px;
+            font-size: 13px;
+            font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+            font-size: 13px;
+        }
+
+        th, td {
+            border: 1px solid var(--border-color);
+            padding: 8px 12px;
+            text-align: left;
+        }
+
+        th {
+            background: var(--code-bg);
+            color: var(--red);
+            font-weight: 700;
+        }
+
+        .eq-explanation {
+            display: flex;
+            gap: 16px;
+            margin: 16px 0;
+            padding: 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+        }
+
+        .eq-box {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .eq-annotation {
+            flex: 1;
+            min-width: 0;
+            font-size: 13px;
+            color: #333;
+        }
+
+        .key-takeaway {
+            background: #f0f7f0;
+            border-left: 4px solid #2d6a2d;
+            padding: 14px 18px;
+            margin: 28px 0;
+            border-radius: 2px;
+        }
+
+        .key-takeaway strong {
+            color: #2d6a2d;
+        }
+
+        .nav-links {
+            margin-top: 48px;
+            padding-top: 24px;
+            border-top: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .insight-box {
+            background: #f0f4ff;
+            border-left: 4px solid #1a5bb5;
+            padding: 12px 18px;
+            margin: 20px 0;
+            border-radius: 2px;
+        }
+
+        .insight-box strong {
+            color: #1a5bb5;
+        }
+
+        ul li {
+            margin-bottom: 8px;
+        }
+
+        .math-block {
+            overflow-x: auto;
+            padding: 8px 0;
+        }
+
+        .token-table {
+            font-size: 12px;
+        }
+
+        .token-table td {
+            font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+        }
+
+        .red-text {
+            color: var(--red);
+        }
+    </style>
+</head>
+<body>
+
+<h1>The Mathematics of GRPO</h1>
+<p class="subtitle">Group Relative Policy Optimization — from <em>why PPO's critic is a bottleneck</em> to <em>how DeepSeek eliminated it</em>, with a fully worked dry run.</p>
+
+<nav style="margin: 24px 0 32px 0; font-size: 13px; display: flex; gap: 12px; flex-wrap: wrap;">
+    <a href="#problem">1. The Problem</a>
+    <a href="#ppo">2. PPO Recap</a>
+    <a href="#critic">3. Why the Critic Hurts</a>
+    <a href="#insight">4. The Core Insight</a>
+    <a href="#advantage">5. Group Advantage</a>
+    <a href="#objective">6. The GRPO Objective</a>
+    <a href="#kl">7. KL Penalty</a>
+    <a href="#clipping">8. Clipping Mechanics</a>
+    <a href="#dryrun">9. Full Dry Run</a>
+    <a href="#deepseek">10. Why DeepSeek Knew</a>
+    <a href="#limits">11. When It Breaks</a>
+</nav>
+
+<!-- ==================== SECTION 1 ==================== -->
+<h2 id="problem">1. The Problem GRPO Was Built To Solve</h2>
+
+<p>Before GRPO, the standard way to fine-tune an LLM with RL was <strong>PPO</strong> (Proximal Policy Optimization). PPO worked, but it had a hidden tax: <strong>a second neural network the size of your policy model</strong> called the <em>critic</em> (or value function).</p>
+
+<p>If your policy was 7B parameters, your critic was also ~7B parameters. That meant:</p>
+
+<ul>
+    <li><strong>Memory doubled</strong> — two models in GPU memory instead of one.</li>
+    <li><strong>Training instability</strong> — the critic itself had to be trained from scratch during RL, and it often oscillated.</li>
+    <li><strong>Credit assignment confusion</strong> — in LLMs, only the final token gets a reward from the reward model. The critic is asked to predict values for <em>every</em> token, but the signal is sparse. This is fundamentally hard.</li>
+</ul>
+
+<p>GRPO asks a sharp question: <strong>Do we actually need a learned critic at all?</strong></p>
+
+<div class="callout">
+    <strong>The answer:</strong> No — if we sample multiple outputs for the same prompt, we can use the group itself to estimate how good each output is.
+</div>
+
+<!-- ==================== SECTION 2 ==================== -->
+<h2 id="ppo">2. PPO Recap — What GRPO Replaces</h2>
+
+<p>PPO maximizes this surrogate objective:</p>
+
+<div class="math-block">
+$$
+\mathcal{J}_{\text{PPO}}(\theta) = \mathbb{E}_{q \sim \mathcal{D}, \, o \sim \pi_{\theta_{\text{old}}}(\cdot|q)}
+\left[ \frac{1}{|o|} \sum_{t=1}^{|o|} \min\left(
+\frac{\pi_\theta(o_t|q,o_{<t})}{\pi_{\theta_{\text{old}}}(o_t|q,o_{<t})} A_t,\;
+\operatorname{clip}\!\left(\frac{\pi_\theta(o_t|q,o_{<t})}{\pi_{\theta_{\text{old}}}(o_t|q,o_{<t})}, 1-\epsilon, 1+\epsilon\right) A_t
+\right) \right]
+$$
+</div>
+
+<p>Where $A_t$ is the <strong>advantage</strong> at token $t$, computed using <strong>Generalized Advantage Estimation (GAE)</strong>:</p>
+
+<div class="math-block">
+$$
+A_t = \sum_{l=0}^{T-t} (\gamma\lambda)^l \delta_{t+l}, \quad \delta_t = r_t + \gamma V(s_{t+1}) - V(s_t)
+$$
+</div>
+
+<p>That $V(\cdot)$ is the <strong>critic</strong> — a learned value function. The critic estimates "how good is this state?" so we can tell whether a reward was higher or lower than expected.</p>
+
+<p><strong>Without the critic, PPO can't compute advantages.</strong> GRPO removes this dependency entirely.</p>
+
+<!-- ==================== SECTION 3 ==================== -->
+<h2 id="critic">3. Why the Critic Is a Problem in LLM Training</h2>
+
+<h3>3.1 Memory</h3>
+<p>For a 7B model, storing the critic's parameters (in BF16) requires ~14 GB <em>just for weights</em>. Add optimizer states, gradients, activations. With ZeRO stage 3, you distribute this, but the total compute still scales with <strong>policy + critic</strong>.</p>
+
+<h3>3.2 The Sparse Reward Problem</h3>
+<p>In LLM RL, the reward model gives a single score for the <em>entire completion</em>. The critic must learn to decompose this into per-token values — a fundamentally ill-posed task. If a model solves the math problem correctly but had a small typo in token 50, how should the critic assign value to token 50 vs token 150?</p>
+
+<h3>3.3 Training Noise</h3>
+<p>The critic itself is a moving target — it's trained concurrently with the policy. Both networks chase each other, which adds noise to the advantage estimates. This slows convergence.</p>
+
+<div class="callout">
+    <strong>Key observation:</strong> For mathematical reasoning with <strong>verifiable rewards</strong> (answer is right or wrong), we don't need a learned baseline. We can just sample multiple answers and compare them.
+</div>
+
+<!-- ==================== SECTION 4 ==================== -->
+<h2 id="insight">4. The Core Insight: You <em>Are</em> the Baseline</h2>
+
+<p>Imagine you ask a model the same question 4 times and get 4 answers. Two are correct, two are wrong.</p>
+
+<p>The <strong>average reward</strong> across the group tells you how the model is doing <em>right now</em>. A correct answer is better than average; a wrong answer is worse. That difference <em>is</em> the advantage — no critic needed.</p>
+
+<div class="insight-box">
+    <strong>Perspective — Statistics:</strong><br>
+    The group mean is an <strong>unbiased Monte Carlo estimate</strong> of the expected reward under the old policy. The standard deviation scales the signal. This is exactly what a value function estimates — just computed empirically.<br><br>
+    <strong>Perspective — Contrastive Learning:</strong><br>
+    GRPO implicitly creates a contrastive objective within each group: increase probability of above-average responses, decrease probability of below-average ones. This is why recent papers (arXiv:2503.06639) call GRPO "a contrastive loss with synthetic data drawn from the previous policy."
+</div>
+
+<!-- ==================== SECTION 5 ==================== -->
+<h2 id="advantage">5. How Group Advantage Works</h2>
+
+<p>For each prompt $q$, we sample $G$ completions $\{o_1, o_2, \dots, o_G\}$ from the old policy $\pi_{\theta_{\text{old}}}$. A reward function (e.g., exact match for math) gives scores $\{r_1, r_2, \dots, r_G\}$.</p>
+
+<p>The advantage for each output is:</p>
+
+<div class="math-block">
+$$
+\hat{A}_i = \frac{r_i - \mu_r}{\sigma_r + \eta}
+\quad\text{where}\quad
+\mu_r = \frac{1}{G}\sum_{j=1}^G r_j,\quad
+\sigma_r^2 = \frac{1}{G}\sum_{j=1}^G (r_j - \mu_r)^2
+$$
+</div>
+
+<p>$\eta$ is a small constant (e.g., $10^{-4}$) to prevent division by zero when all rewards are identical.</p>
+
+<div class="callout">
+    <strong>Crucial:</strong> In outcome-supervised GRPO, <em>every token</em> in output $o_i$ gets the same advantage $\hat{A}_i$. The advantage is sequence-level, not token-level. This is the simplifying assumption: if the whole answer is good, all tokens that led to it were good.
+</div>
+
+<h3>5.1 What This Means Geometrically</h3>
+
+<p>After normalization:</p>
+<ul>
+    <li>Advantages sum to zero within each group: $\sum_i \hat{A}_i = 0$</li>
+    <li>Advantages have unit variance (approximately): $\text{Var}(\hat{A}) \approx 1$</li>
+    <li>A response with $r_i > \mu_r$ gets <strong>positive advantage</strong> → policy should increase its probability</li>
+    <li>A response with $r_i < \mu_r$ gets <strong>negative advantage</strong> → policy should decrease its probability</li>
+</ul>
+
+<h3>5.2 Why Not Just Use Raw Rewards?</h3>
+
+<p>Raw rewards are on an arbitrary scale. A reward of 0.9 might be excellent on one problem but mediocre on another. Normalization within the group makes the scale <strong>relative and comparable</strong> across different prompts.</p>
+
+<div class="proof-block">
+    <strong>Proof — Group normalization removes absolute scale:</strong><br>
+    Suppose reward function $r$ is replaced by $r' = a\cdot r + b$ (affine transformation). Then:
+    $$
+    \hat{A}'_i = \frac{(a r_i + b) - (a\mu_r + b)}{a\sigma_r} = \frac{a(r_i - \mu_r)}{a\sigma_r} = \hat{A}_i
+    $$
+    Advantages are <strong>invariant to affine transformations of the reward</strong>. The group structure absorbs the shift and scale.
+</div>
+
+<!-- ==================== SECTION 6 ==================== -->
+<h2 id="objective">6. The Full GRPO Objective</h2>
+
+<p>Putting it all together, GRPO maximizes:</p>
+
+<div class="math-block">
+$$
+\mathcal{J}_{\text{GRPO}}(\theta) =
+\mathbb{E}_{q \sim \mathcal{D}, \, \{o_i\}_{i=1}^G \sim \pi_{\theta_{\text{old}}}(\cdot|q)}
+\frac{1}{G} \sum_{i=1}^G \frac{1}{|o_i|} \sum_{t=1}^{|o_i|}
+\Bigg[
+\underbrace{\min\Big(
+\rho_{i,t}(\theta)\,\hat{A}_i,\;
+\operatorname{clip}(\rho_{i,t}(\theta), 1-\epsilon, 1+\epsilon)\,\hat{A}_i
+\Big)}_{\text{clipped policy gradient}}
+- \underbrace{\beta\; \mathbb{D}_{\text{KL}}\big[\pi_\theta \;\|\; \pi_{\text{ref}}\big]}_{\text{KL regularization}}
+\Bigg]
+$$
+</div>
+
+<p>Where:</p>
+
+<table>
+    <tr><th>Symbol</th><th>Meaning</th><th>Range / Notes</th></tr>
+    <tr><td>$\pi_\theta$</td><td>Current policy (being updated)</td><td>Updated each gradient step</td></tr>
+    <tr><td>$\pi_{\theta_{\text{old}}}$</td><td>Policy used to sample completions</td><td>Frozen during one iteration</td></tr>
+    <tr><td>$\pi_{\text{ref}}$</td><td>Reference model (usually the SFT model)</td><td>Frozen throughout training</td></tr>
+    <tr><td>$\rho_{i,t}(\theta)$</td><td>Importance weight: $\frac{\pi_\theta(o_{i,t}|q,o_{i,<t})}{\pi_{\theta_{\text{old}}}(o_{i,t}|q,o_{i,<t})}$</td><td>$[0, \infty)$, ideally near 1</td></tr>
+    <tr><td>$\hat{A}_i$</td><td>Group-normalized advantage for output $i$</td><td>Same for all tokens in $o_i$</td></tr>
+    <tr><td>$\epsilon$</td><td>Clipping threshold</td><td>Typically 0.2</td></tr>
+    <tr><td>$\beta$</td><td>KL penalty coefficient</td><td>0.001–0.04 typically</td></tr>
+    <tr><td>$G$</td><td>Group size (outputs per prompt)</td><td>Often 8–64</td></tr>
+</table>
+
+<h3>6.1 Why Each Piece Exists</h3>
+
+<ul>
+    <li><strong>$\rho_{i,t}(\theta)\,\hat{A}_i$</strong> — The standard policy gradient: increase probability of good tokens, decrease probability of bad ones. The ratio corrects for the fact that we sampled from the <em>old</em> policy (importance sampling).</li>
+    <li><strong>$\operatorname{clip}(\rho, 1-\epsilon, 1+\epsilon)\,\hat{A}_i$</strong> — Safety mechanism: if the ratio moves too far from 1, stop the gradient. This prevents one bad batch from destroying the model.</li>
+    <li><strong>$\min(\text{unclipped}, \text{clipped})$</strong> — Take the pessimistic bound. If advantage is positive, clip caps the upside. If negative, clip caps the downside. The min ensures we never get a larger update than the clipped version would allow.</li>
+    <li><strong>$- \beta\,\mathbb{D}_{\text{KL}}$</strong> — Don't drift too far from the reference model. This is the guardrail against reward hacking.</li>
+</ul>
+
+<h3>6.2 Different Perspectives on the Objective</h3>
+
+<div class="insight-box">
+    <strong>Perspective — Optimization:</strong><br>
+    GRPO is solving a <strong>constrained optimization</strong> problem: maximize expected reward subject to a KL constraint between $\pi_\theta$ and $\pi_{\text{ref}}$. The $\beta$ term is the Lagrange multiplier in the unconstrained dual.<br><br>
+    <strong>Perspective — Information Theory:</strong><br>
+    The KL term $\mathbb{D}_{\text{KL}}[\pi_\theta \| \pi_{\text{ref}}]$ is the <strong>information cost</strong> of moving away from the reference policy. It measures how many extra bits we need to encode outputs under $\pi_\theta$ when the true distribution is $\pi_{\text{ref}}$.<br><br>
+    <strong>Perspective — Trust Region:</strong><br>
+    The clipping $[1-\epsilon, 1+\epsilon]$ defines a <strong>trust region</strong> in ratio-space, not parameter-space. It says: "per token, don't multiply or divide probabilities by more than $1\pm\epsilon$ compared to the old policy."
+</div>
+
+<!-- ==================== SECTION 7 ==================== -->
+<h2 id="kl">7. The KL Penalty — An Unbiased Estimator</h2>
+
+<p>PPO typically adds the KL penalty <em>inside the reward</em>:
+$r_t' = r_t - \beta \log\frac{\pi_\theta}{\pi_{\text{ref}}}$.
+GRPO instead adds it <em>directly to the loss</em>. This keeps the advantage calculation clean.</p>
+
+<p>The exact KL divergence between two autoregressive policies is intractable (it requires summing over all possible token sequences). GRPO uses a <strong>per-token unbiased estimator</strong> from Schulman (2020):</p>
+
+<div class="math-block">
+$$
+\mathbb{D}_{\text{KL}}[\pi_\theta \| \pi_{\text{ref}}] \approx
+\underbrace{\frac{\pi_{\text{ref}}(o_{i,t} | q, o_{i,<t})}{\pi_\theta(o_{i,t} | q, o_{i,<t})}}_{\text{ratio of probs}}
+- \underbrace{\log\frac{\pi_{\text{ref}}(o_{i,t} | q, o_{i,<t})}{\pi_\theta(o_{i,t} | q, o_{i,<t})}}_{\text{log-ratio}}
+- 1
+$$
+</div>
+
+<h3>7.1 Why This Specific Formula?</h3>
+
+<p>The standard KL definition for two distributions $P$ and $Q$ (where $P = \pi_{\text{ref}}$, $Q = \pi_\theta$) is:</p>
+
+<div class="math-block">
+$$
+\mathbb{D}_{\text{KL}}[P \| Q] = \sum_x P(x) \log\frac{P(x)}{Q(x)} = \mathbb{E}_{x \sim P}\left[\log\frac{P(x)}{Q(x)}\right]
+$$
+</div>
+
+<p>But this requires sampling from $\pi_{\text{ref}}$, not $\pi_\theta$. We want a per-token estimator that uses the <em>current</em> token (from the completion sampled by $\pi_{\theta_{\text{old}}}$) to estimate KL.</p>
+
+<p>The unbiased estimator comes from the identity:</p>
+
+<div class="math-block">
+$$
+\log x \leq x - 1 \quad\Longrightarrow\quad \log\frac{Q}{P} \leq \frac{Q}{P} - 1
+$$
+</div>
+
+<p>Rearranging the standard KL with <em>reverse</em> expectations gives us an estimator that's always non-negative and uses only the current token's probabilities:</p>
+
+<div class="math-block">
+$$
+\hat{d}_t = \frac{P}{Q} - \log\frac{P}{Q} - 1
+$$
+</div>
+
+<p>Where $P = \pi_{\text{ref}}(o_{i,t}|\cdots)$ and $Q = \pi_\theta(o_{i,t}|\cdots)$. This is the <strong>biased KL estimator</strong> — it has positive bias (always overestimates) but low variance.</p>
+
+<div class="proof-block">
+    <strong>Proof — Always non-negative:</strong><br>
+    Let $x = \frac{Q}{P}$. Then $\hat{d} = \frac{1}{x} + \log x - 1$.<br>
+    The function $f(x) = \frac{1}{x} + \log x - 1$ has derivative $f'(x) = -\frac{1}{x^2} + \frac{1}{x}$, which is zero at $x=1$.<br>
+    $f''(1) = 2 + 0 > 0$, so $x=1$ is a minimum. $f(1) = 1 + 0 - 1 = 0$.<br>
+    Therefore $f(x) \geq 0$ for all $x > 0$. The KL estimate is always non-negative.
+</div>
+
+<h3>7.2 KL in the Loss</h3>
+
+<p>The total per-token loss becomes:</p>
+
+<div class="math-block">
+$$
+\ell_{i,t} = -\big[\underbrace{\min(\rho_{i,t}\hat{A}_i,\; \operatorname{clip}(\rho_{i,t}, 1-\epsilon, 1+\epsilon)\hat{A}_i)}_{\text{policy gradient}} - \underbrace{\beta \hat{d}_{i,t}}_{\text{KL penalty}}\big]
+$$
+</div>
+
+<p>The negative sign is because we minimize loss but maximize the objective.</p>
+
+<!-- ==================== SECTION 8 ==================== -->
+<h2 id="clipping">8. The Clipping Mechanism — A Deep Dive</h2>
+
+<p>The clipping is perhaps the most subtle part. Let's understand exactly what it does.</p>
+
+<h3>8.1 Why Clip?</h3>
+
+<p>Without clipping, the policy gradient update is:</p>
+
+<div class="math-block">
+$$
+\nabla_\theta \mathcal{J} = \mathbb{E}\left[\rho_{i,t}(\theta) \hat{A}_i \nabla_\theta \log \pi_\theta(o_{i,t})\right]
+$$
+</div>
+
+<p>If $\rho_{i,t}$ becomes very large (say the new policy assigns much higher probability to this token than the old policy did), the gradient is correspondingly large. A single bad update can destabilize training.</p>
+
+<h3>8.2 The Clip Function</h3>
+
+<div class="math-block">
+$$
+\operatorname{clip}(\rho, 1-\epsilon, 1+\epsilon) =
+\begin{cases}
+1-\epsilon, & \rho < 1-\epsilon \\
+\rho, & 1-\epsilon \leq \rho \leq 1+\epsilon \\
+1+\epsilon, & \rho > 1+\epsilon
+\end{cases}
+$$
+</div>
+
+<h3>8.3 The Min Operation — Why Both Terms?</h3>
+
+<p>Consider two cases:</p>
+
+<table>
+    <tr><th>Case</th><th>$\hat{A}_i > 0$ (good response)</th><th>$\hat{A}_i < 0$ (bad response)</th></tr>
+    <tr>
+        <td><strong>Unclipped term</strong></td>
+        <td>$\rho\hat{A}_i$ — grows with $\rho$</td>
+        <td>$\rho\hat{A}_i$ — becomes more negative as $\rho$ grows</td>
+    </tr>
+    <tr>
+        <td><strong>Clipped term</strong></td>
+        <td>$\operatorname{clip}(\rho)\hat{A}_i$ — capped at $(1+\epsilon)\hat{A}_i$</td>
+        <td>$\operatorname{clip}(\rho)\hat{A}_i$ — capped at $(1-\epsilon)\hat{A}_i$</td>
+    </tr>
+    <tr>
+        <td><strong>$\min$ result</strong></td>
+        <td>Takes <strong>clipped</strong> (smaller value)</td>
+        <td>Takes <strong>unclipped</strong> (more negative = smaller)</td>
+    </tr>
+    <tr>
+        <td><strong>Effect</strong></td>
+        <td>Prevents over-optimizing good tokens</td>
+        <td>Preserves full penalty for bad tokens</td>
+    </tr>
+</table>
+
+<p>This asymmetry is intentional:</p>
+<ul>
+    <li>When the model discovers a <em>good</em> behavior, don't let it overshoot — clip the reward signal.</li>
+    <li>When the model produces a <em>bad</em> behavior, penalize it fully — don't clip the punishment.</li>
+</ul>
+
+<div class="callout">
+    <strong>The intuition:</strong> This is a pessimistic update. If the model thinks a token is much better than the old policy thought it was ($\rho > 1+\epsilon$), we distrust that move and cap the reward. But if it makes a token much worse ($\rho > 1+\epsilon$ with negative advantage), we fully apply the penalty to strongly discourage regression.
+</div>
+
+<!-- ==================== SECTION 9 ==================== -->
+<h2 id="dryrun">9. Full Dry Run — Numbers on the Page</h2>
+
+<p>Let's walk through a complete GRPO update step-by-step with actual numbers.</p>
+
+<h3>Setup</h3>
+
+<p><strong>Prompt:</strong> "What is 17 + 25?"  (Correct answer: 42)</p>
+<p><strong>Group size:</strong> $G = 4$</p>
+<p><strong>Reward:</strong> $r_i = 1$ if final answer is 42, else 0.</p>
+<p><strong>Old policy:</strong> $\pi_{\theta_{\text{old}}}$ — we have its token log-probabilities.</p>
+<p><strong>New policy:</strong> $\pi_\theta$ — after one gradient step, slightly different probabilities.</p>
+<p><strong>Hyperparameters:</strong> $\epsilon = 0.2$, $\beta = 0.04$</p>
+
+<h3>9.1 Sampling and Rewards</h3>
+
+<p>The old policy samples 4 completions:</p>
+
+<table class="token-table">
+    <tr><th>#</th><th>Completion</th><th>Correct?</th><th>$r_i$</th></tr>
+    <tr><td>1</td><td><code>"The sum of 17 and 25 is 42."</code></td><td>Yes</td><td>1.0</td></tr>
+    <tr><td>2</td><td><code>"17 + 25 = 42, so answer."</code></td><td>Yes</td><td>1.0</td></tr>
+    <tr><td>3</td><td><code>"Adding gives 43."</code></td><td>No</td><td>0.0</td></tr>
+    <tr><td>4</td><td><code>"I think it might be 42."</code></td><td>No</td><td>0.0</td></tr>
+</table>
+
+<h3>9.2 Compute Group Statistics</h3>
+
+<div class="math-block">
+$$
+\mu_r = \frac{1 + 1 + 0 + 0}{4} = 0.5
+$$
+$$
+\sigma_r = \sqrt{\frac{(1-0.5)^2 + (1-0.5)^2 + (0-0.5)^2 + (0-0.5)^2}{4}} = \sqrt{\frac{0.25 + 0.25 + 0.25 + 0.25}{4}} = \sqrt{0.25} = 0.5
+$$
+</div>
+
+<h3>9.3 Compute Advantages</h3>
+
+<table class="token-table">
+    <tr><th>$i$</th><th>$r_i$</th><th>$\hat{A}_i = (r_i - 0.5) / 0.5$</th></tr>
+    <tr><td>1</td><td>1.0</td><td>$(1.0 - 0.5) / 0.5 = 1.0$</td></tr>
+    <tr><td>2</td><td>1.0</td><td>$(1.0 - 0.5) / 0.5 = 1.0$</td></tr>
+    <tr><td>3</td><td>0.0</td><td>$(0.0 - 0.5) / 0.5 = -1.0$</td></tr>
+    <tr><td>4</td><td>0.0</td><td>$(0.0 - 0.5) / 0.5 = -1.0$</td></tr>
+</table>
+
+<div class="callout">
+    <strong>Notice:</strong> The advantages sum to $1 + 1 - 1 - 1 = 0$. This is by construction — the mean of z-scored values is always zero. If every group member had the same reward (all correct or all wrong), $\sigma_r = 0$ and we'd use $\eta$ to avoid division by zero.
+</div>
+
+<h3>9.4 Per-Token Probabilities and Ratios</h3>
+
+<p>Let's look at completion #1: <code>"The sum of 17 and 25 is 42."</code></p>
+<p>Tokenized (simplified): <code>["The", "sum", "of", "17", "and", "25", "is", "42", "."]</code></p>
+
+<table class="token-table">
+    <tr><th>Token $t$</th><th>$\pi_{\theta_{\text{old}}}(o_t)$</th><th>$\pi_\theta(o_t)$</th><th>$\rho_t = \frac{\pi_\theta}{\pi_{\theta_{\text{old}}}}$</th><th>$\operatorname{clip}(\rho_t, 0.8, 1.2)$</th></tr>
+    <tr><td>The</td><td>0.15</td><td>0.16</td><td>1.067</td><td>1.067</td></tr>
+    <tr><td>sum</td><td>0.10</td><td>0.12</td><td>1.200</td><td>1.200</td></tr>
+    <tr><td>of</td><td>0.20</td><td>0.19</td><td>0.950</td><td>0.950</td></tr>
+    <tr><td>17</td><td>0.08</td><td>0.11</td><td>1.375</td><td><strong>1.200</strong></td></tr>
+    <tr><td>and</td><td>0.25</td><td>0.24</td><td>0.960</td><td>0.960</td></tr>
+    <tr><td>25</td><td>0.09</td><td>0.10</td><td>1.111</td><td>1.111</td></tr>
+    <tr><td>is</td><td>0.30</td><td>0.28</td><td>0.933</td><td>0.933</td></tr>
+    <tr><td><strong>42</strong></td><td>0.05</td><td>0.09</td><td><strong>1.800</strong></td><td><strong>1.200</strong></td></tr>
+    <tr><td>.</td><td>0.40</td><td>0.38</td><td>0.950</td><td>0.950</td></tr>
+</table>
+
+<h3>9.5 Compute Policy Gradient Loss for Completion #1 ($\hat{A} = 1.0$)</h3>
+
+<p>Since $\hat{A} > 0$, the $\min$ will take the clipped value whenever $\rho > 1+\epsilon$ (i.e., $\rho > 1.2$):</p>
+
+<table class="token-table">
+    <tr><th>Token $t$</th><th>$\rho_t \hat{A}$</th><th>$\operatorname{clip}(\rho_t)\hat{A}$</th><th>$\min$ result</th></tr>
+    <tr><td>The</td><td>1.067</td><td>1.067</td><td>1.067</td></tr>
+    <tr><td>sum</td><td>1.200</td><td>1.200</td><td>1.200</td></tr>
+    <tr><td>of</td><td>0.950</td><td>0.950</td><td>0.950</td></tr>
+    <tr><td>17</td><td><strong>1.375</strong></td><td><strong>1.200</strong></td><td><strong>1.200</strong> ← clipped!</td></tr>
+    <tr><td>and</td><td>0.960</td><td>0.960</td><td>0.960</td></tr>
+    <tr><td>25</td><td>1.111</td><td>1.111</td><td>1.111</td></tr>
+    <tr><td>is</td><td>0.933</td><td>0.933</td><td>0.933</td></tr>
+    <tr><td>42</td><td><strong>1.800</strong></td><td><strong>1.200</strong></td><td><strong>1.200</strong> ← clipped!</td></tr>
+    <tr><td>.</td><td>0.950</td><td>0.950</td><td>0.950</td></tr>
+</table>
+
+<p>The gradient contribution from token "42" is capped — even though the model now assigns 1.8x the probability, we only credit it for 1.2x. This prevents the model from over-investing probability mass in this specific token at this specific position.</p>
+
+<h3>9.6 Compute Policy Gradient Loss for Completion #3 ($\hat{A} = -1.0$)</h3>
+
+<p>Completion #3: <code>"Adding gives 43."</code> (wrong answer)</p>
+
+<table class="token-table">
+    <tr><th>Token $t$</th><th>$\pi_{\theta_{\text{old}}}(o_t)$</th><th>$\pi_\theta(o_t)$</th><th>$\rho_t$</th><th>$\rho_t \hat{A}$</th><th>$\operatorname{clip}(\rho_t)\hat{A}$</th><th>$\min$</th></tr>
+    <tr><td>Adding</td><td>0.12</td><td>0.11</td><td>0.917</td><td>-0.917</td><td>-0.917</td><td>-0.917</td></tr>
+    <tr><td>gives</td><td>0.18</td><td>0.15</td><td>0.833</td><td>-0.833</td><td>-0.833</td><td>-0.833</td></tr>
+    <tr><td>43</td><td>0.07</td><td>0.04</td><td><strong>0.571</strong></td><td><strong>-0.571</strong></td><td><strong>-0.800</strong></td><td><strong>-0.800</strong> ← clipped!</td></tr>
+    <tr><td>.</td><td>0.35</td><td>0.33</td><td>0.943</td><td>-0.943</td><td>-0.943</td><td>-0.943</td></tr>
+</table>
+
+<div class="insight-box">
+    <strong>Notice the asymmetry:</strong><br>
+    For the wrong answer "43" ($\rho = 0.571$), the unclipped term is $-0.571$ but the clipped term is $-0.800$. The $\min$ takes $-0.800$ — the <strong>more negative</strong> (stronger penalty) value.<br><br>
+    For the correct answer "42" in completion #1 ($\rho = 1.800$), the unclipped term was $1.800$ but the clipped term was $1.200$. The $\min$ took $1.200$ — the <strong>smaller</strong> (weaker reward) value.<br><br>
+    <strong>Asymmetric clipping:</strong> good moves are capped, bad moves are punished in full.
+</div>
+
+<h3>9.7 Compute KL Penalty</h3>
+
+<p>For each token, we compute the KL estimate using the unbiased estimator. Let's do completion #1, token "42":</p>
+
+<div class="math-block">
+$$
+\pi_{\text{ref}}(42 | \cdots) = 0.04 \quad \text{(reference model probability for "42" at this position)}
+$$
+$$
+\pi_\theta(42 | \cdots) = 0.09 \quad \text{(current policy probability)}
+$$
+$$
+\frac{\pi_{\text{ref}}}{\pi_\theta} = \frac{0.04}{0.09} = 0.444
+$$
+$$
+\log\frac{\pi_{\text{ref}}}{\pi_\theta} = \log(0.444) = -0.811
+$$
+$$
+\hat{d} = 0.444 - (-0.811) - 1 = 0.444 + 0.811 - 1 = 0.255
+$$
+</div>
+
+<p>This is positive (as guaranteed). The model is moving away from the reference — KL is 0.255 nats for this single token.</p>
+
+<p>For the wrong completion #3, token "43":</p>
+
+<div class="math-block">
+$$
+\pi_{\text{ref}}(43 | \cdots) = 0.06, \quad \pi_\theta(43 | \cdots) = 0.04
+$$
+$$
+\frac{\pi_{\text{ref}}}{\pi_\theta} = \frac{0.06}{0.04} = 1.500
+$$
+$$
+\log\frac{\pi_{\text{ref}}}{\pi_\theta} = \log(1.500) = 0.405
+$$
+$$
+\hat{d} = 1.500 - 0.405 - 1 = 0.095
+$$
+</div>
+
+<p>The KL is smaller here because $\pi_\theta$ is closer to $\pi_{\text{ref}}$ for this token (the model hasn't moved much yet for the wrong answer token).</p>
+
+<h3>9.8 Final Loss Computation</h3>
+
+<p>For completion #1, token "42":</p>
+
+<div class="math-block">
+$$
+\ell = -[\underbrace{1.200}_{\text{policy gradient}} - \underbrace{0.04 \times 0.255}_{\beta\cdot\text{KL}}] = -[1.200 - 0.0102] = -1.1898
+$$
+</div>
+
+<p>For completion #3, token "43":</p>
+
+<div class="math-block">
+$$
+\ell = -[\underbrace{(-0.800)}_{\text{policy gradient}} - \underbrace{0.04 \times 0.095}_{\beta\cdot\text{KL}}] = -[-0.800 - 0.0038] = 0.8038
+$$
+</div>
+
+<p>The total loss is the average across all outputs and all tokens. The gradient of this loss w.r.t. $\theta$ tells us how to update the model parameters.</p>
+
+<h3>9.9 Full Gradient Direction — What Actually Changes</h3>
+
+<div class="dry-run">
+    <strong>Gradient overview:</strong><br><br>
+    For completion #1 (correct, $\hat{A}=+1.0$):<br>
+    &nbsp;&nbsp;- Tokens where $\rho_t \leq 1.2$: gradient pushes $\pi_\theta(o_t) \uparrow$ (increase probability)<br>
+    &nbsp;&nbsp;- Token "42" ($\rho=1.8$, clipped): gradient is <em>capped</em> — we increase prob but only at 1.2x rate<br>
+    &nbsp;&nbsp;- KL term: slightly opposes the increase (pull back toward $\pi_{\text{ref}}$)<br><br>
+    For completion #3 (wrong, $\hat{A}=-1.0$):<br>
+    &nbsp;&nbsp;- Tokens where $\rho_t \geq 0.8$: gradient pushes $\pi_\theta(o_t) \downarrow$ (decrease probability)<br>
+    &nbsp;&nbsp;- Token "43" ($\rho=0.571$, clipped on lower end): gradient is <em>strengthened</em> — we decrease prob more than the raw ratio suggests<br>
+    &nbsp;&nbsp;- KL term: slightly opposes the decrease<br><br>
+    <strong>Net effect:</strong> The model learns to produce completions that look more like #1 and #2, and less like #3 and #4. The correct answer route gets probability mass; the wrong route loses it. But the clipping prevents the model from moving too fast.
+</div>
+
+<!-- ==================== SECTION 10 ==================== -->
+<h2 id="deepseek">10. Why DeepSeek Knew GRPO Would Work</h2>
+
+<p>GRPO wasn't a shot in the dark. DeepSeek had strong theoretical and practical reasons to believe it would work.</p>
+
+<h3>10.1 The Reward Model Connection</h3>
+
+<p>Reward models used in RLHF are trained on <strong>comparisons</strong> — given two outputs for the same prompt, predict which one is better. This is inherently a <em>relative</em> training objective. When PPO uses a value function, it converts these relative judgments back into absolute scores, then computes advantages relative to a learned baseline. This adds a layer of indirection.</p>
+
+<p>GRPO keeps the comparison at the core of the update: "within this group of outputs from the same prompt, which ones are above average?" This aligns naturally with how reward models are trained.</p>
+
+<h3>10.2 The Memory Argument</h3>
+
+<p>For a 7B model with a 7B critic, PPO requires ~28 GB just for model weights (policy + critic, BF16), plus optimizer states (another ~28 GB at minimum), plus activations. On 8 × A100 80 GB GPUs, this is manageable but wasteful. For larger models (70B+), the critic doubles the memory requirement, often forcing more expensive parallelism strategies.</p>
+
+<p>GRPO frees the critic's memory, allowing larger batch sizes or longer sequences with the same hardware.</p>
+
+<h3>10.3 The Empirical Signal</h3>
+
+<div class="insight-box">
+    <strong>Key insight from DeepSeek's experiments:</strong><br>
+    They found that GRPO with <strong>64 samples per prompt</strong> and <strong>outcome supervision</strong> (reward only at the end) achieved state-of-the-art math reasoning. The group normalization provided enough signal stability that process supervision (reward at each step) wasn't needed for their best results.<br><br>
+    From Table 5 in the paper: DeepSeekMath-RL 7B achieved <strong>51.7% on MATH</strong> (competition-level) and <strong>88.2% on GSM8K</strong> — surpassing all open-source models at any size, while only being trained on GSM8K + MATH chain-of-thought data.
+</div>
+
+<h3>10.4 The Theoretical Reason: It's PPO Without the Value Function</h3>
+
+<p>The GRPO objective is mathematically almost identical to PPO <em>if</em> you replace the learned advantage with the group-normalized reward. The clipping, the ratio, the trust region — all the proven machinery of PPO is preserved. The only change is how the advantage is computed.</p>
+
+<p>This means GRPO inherits PPO's convergence properties and stability guarantees, while shedding the critic's baggage.</p>
+
+<h3>10.5 The KL Estimator Choice</h3>
+
+<p>The unbiased KL estimator from Schulman (2020) was already proven in prior work. DeepSeek didn't invent it — they chose it because it:</p>
+<ul>
+    <li>Is always non-negative (can't have negative regularization)</li>
+    <li>Has lower variance than Monte Carlo KL estimates</li>
+    <li>Works per-token, so it integrates naturally into the autoregressive loss</li>
+</ul>
+
+<!-- ==================== SECTION 11 ==================== -->
+<h2 id="limits">11. When GRPO Breaks — Limitations</h2>
+
+<p>No algorithm is universal. Here's where GRPO struggles.</p>
+
+<h3>11.1 Homogeneous Groups (All Rewards Equal)</h3>
+
+<p>If all $G$ outputs get the same reward (all correct or all wrong), $\sigma_r = 0$ and the advantage is zero (or undefined without $\eta$). The gradient vanishes. The model gets no signal for this prompt.</p>
+
+<p>This is common in early training (model always wrong) or late training (model always right). Solutions:</p>
+<ul>
+    <li>Use a continuous reward model instead of binary — creates variance even when all outputs are "correct"</li>
+    <li>Add exploration noise (temperature sampling) to ensure diverse outputs</li>
+    <li>Use $\eta$ to keep a minimal advantage spread</li>
+</ul>
+
+<h3>11.2 Small Group Size</h3>
+
+<p>With $G=2$, the advantage is just $\pm 1$ (after normalization). The signal is minimal — essentially just "which of these two was better?" This reduces to something like pairwise preference optimization. With $G=64$, the group statistics are much more reliable.</p>
+
+<div class="callout">
+    <strong>Tradeoff:</strong> Larger $G$ means better advantage estimates but more compute per prompt. DeepSeek used $G=64$ for their main experiments. Smaller $G$ (like 8) works too but convergence is slower.
+</div>
+
+<h3>11.3 Sequence-Level Advantage vs. Token-Level Credit Assignment</h3>
+
+<p>Every token in a correct answer gets a positive advantage, even if some tokens are spurious or incorrect reasoning steps that happened to lead to the right final answer. Similarly, tokens in wrong answers are all penalized, even if some reasoning steps were correct.</p>
+
+<p>This is a <strong>credit assignment problem</strong>. Process supervision (reward per step) can help, but requires a trained process reward model.</p>
+
+<h3>11.4 The Reference Model Drift Problem</h3>
+
+<p>In iterative GRPO (Algorithm 1), the reference model $\pi_{\text{ref}}$ is periodically set to the current policy $\pi_\theta$. This prevents the KL penalty from being too restrictive, but it also means the reference model drifts over time. If the reward signal is biased, the reference model can drift toward suboptimal behavior.</p>
+
+<h3>11.5 Verifiable Rewards Only (Mostly)</h3>
+
+<p>GRPO shines when rewards are <strong>verifiable</strong> — math answers, code execution, factual correctness. For <strong>subjective</strong> tasks (creative writing, summarization), the reward model's noise interacts with the group normalization in unpredictable ways. The advantage estimate can become unreliable if the reward model's scores are inconsistent within the group.</p>
+
+<div class="key-takeaway">
+    <strong>Key Takeaways — GRPO in One Page</strong><br><br>
+    <strong>What it replaces:</strong> The critic (value function) in PPO. Instead of learning a baseline, it uses the mean reward of a group of sampled outputs.<br><br>
+    <strong>Why it works:</strong> For verifiable tasks, the group mean is a natural, unbiased baseline. Normalization makes advantages scale-invariant and zero-centered.<br><br>
+    <strong>The math:</strong> $A_i = (r_i - \mu_r) / \sigma_r$, then plug into the same clipped surrogate objective as PPO, with a per-token KL penalty added to the loss.<br><br>
+    <strong>The asymmetry:</strong> Clipping is asymmetric — good updates capped at $1+\epsilon$, bad updates punished fully (min operation).<br><br>
+    <strong>The cost:</strong> Saves ~50% memory (no critic) at the cost of needing multiple samples per prompt.<br><br>
+    <strong>When to use:</strong> Verifiable rewards, mathematical reasoning, code generation. When $G$ can be large (8+). When memory is a bottleneck.<br><br>
+    <strong>When to be careful:</strong> Small groups, homogeneous rewards, subjective tasks, continuous training with drifting reference model.
+</div>
+
+<!-- ==================== SECTION 12 ==================== -->
+<h2 id="summary">12. Summary of All Equations</h2>
+
+<table>
+    <tr><th>Component</th><th>Equation</th><th>Purpose</th></tr>
+    <tr>
+        <td>Group Advantage (Outcome)</td>
+        <td>$\hat{A}_i = \frac{r_i - \text{mean}(\mathbf{r})}{\text{std}(\mathbf{r}) + \eta}$</td>
+        <td>Relative quality of each output</td>
+    </tr>
+    <tr>
+        <td>Importance Weight</td>
+        <td>$\rho_{i,t}(\theta) = \frac{\pi_\theta(o_{i,t})}{\pi_{\theta_{\text{old}}}(o_{i,t})}$</td>
+        <td>Correct distribution shift</td>
+    </tr>
+    <tr>
+        <td>Clipped Surrogate</td>
+        <td>$f(\rho, \hat{A}) = \min(\rho\hat{A},\; \text{clip}(\rho, 1-\epsilon, 1+\epsilon)\hat{A})$</td>
+        <td>Stable, pessimistic updates</td>
+    </tr>
+    <tr>
+        <td>KL Estimator</td>
+        <td>$\hat{d} = \frac{\pi_{\text{ref}}}{\pi_\theta} - \log\frac{\pi_{\text{ref}}}{\pi_\theta} - 1$</td>
+        <td>Per-token, always non-negative</td>
+    </tr>
+    <tr>
+        <td>Final Loss (per token)</td>
+        <td>$\ell_{i,t} = -[f(\rho_{i,t}, \hat{A}_i) - \beta \hat{d}_{i,t}]$</td>
+        <td>Maximize objective = minimize loss</td>
+    </tr>
+    <tr>
+        <td>Total GRPO Objective</td>
+        <td>$\mathcal{J}_{\text{GRPO}} = \mathbb{E}\left[\frac{1}{G}\sum_i \frac{1}{|o_i|}\sum_t [f(\rho_{i,t}, \hat{A}_i) - \beta \mathbb{D}_{\text{KL}}]\right]$</td>
+        <td>Full objective</td>
+    </tr>
+</table>
+
+<h2 id="notation">13. Notation Reference</h2>
+
+<table>
+    <tr><th>Symbol</th><th>Meaning</th></tr>
+    <tr><td>$q$</td><td>A prompt / question from the dataset</td></tr>
+    <tr><td>$o_i$</td><td>The $i$-th sampled output (completion)</td></tr>
+    <tr><td>$o_{i,t}$</td><td>The $t$-th token of the $i$-th output</td></tr>
+    <tr><td>$G$</td><td>Group size — number of outputs sampled per prompt</td></tr>
+    <tr><td>$r_i$</td><td>Reward for the $i$-th output</td></tr>
+    <tr><td>$\hat{A}_i$</td><td>Group-normalized advantage for the $i$-th output</td></tr>
+    <tr><td>$\pi_\theta$</td><td>Current policy (parameters $\theta$)</td></tr>
+    <tr><td>$\pi_{\theta_{\text{old}}}$</td><td>Policy used for sampling (frozen)</td></tr>
+    <tr><td>$\pi_{\text{ref}}$</td><td>Reference policy (initial SFT model)</td></tr>
+    <tr><td>$\rho_{i,t}$</td><td>Importance weight ratio for token $t$ of output $i$</td></tr>
+    <tr><td>$\epsilon$</td><td>Clipping hyperparameter (typically 0.2)</td></tr>
+    <tr><td>$\beta$</td><td>KL penalty coefficient</td></tr>
+    <tr><td>$\mu_r$</td><td>Mean reward within the group</td></tr>
+    <tr><td>$\sigma_r$</td><td>Standard deviation of rewards within the group</td></tr>
+    <tr><td>$\eta$</td><td>Small constant for numerical stability</td></tr>
+    <tr><td>$\mathbb{D}_{\text{KL}}$</td><td>Kullback-Leibler divergence</td></tr>
+    <tr><td>$|o_i|$</td><td>Length (number of tokens) of output $i$</td></tr>
+</table>
+
+<div class="nav-links">
+    <a href="index.html">&larr; Back to Study Portal</a>
+    <a href="sft_math.html">SFT Math &rarr;</a>
+</div>
+
+<script>
+    // Render all KaTeX math — first $$ display, then $ inline
+    function renderAllMath() {
+        var html = document.body.innerHTML;
+        
+        // 1. Replace $$...$$ display math blocks first
+        html = html.replace(/\$\$([\s\S]*?)\$\$/g, function(match, tex) {
+            tex = tex.trim();
+            if (tex.length === 0) return match;
+            try {
+                return katex.renderToString(tex, {displayMode: true, throwOnError: false});
+            } catch(e) {
+                return '<span style="color:red">[Error]</span>';
+            }
+        });
+        
+        // 2. Replace $...$ inline math (only single-line, not inside HTML tags)
+        //    Match $...$ where content has no $ or newline, and isn't inside a tag
+        html = html.replace(/\$([^$\n]+?)\$/g, function(match, tex) {
+            if (tex.length === 0) return match;
+            try {
+                return katex.renderToString(tex, {displayMode: false, throwOnError: false});
+            } catch(e) {
+                return match;
+            }
+        });
+        
+        document.body.innerHTML = html;
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', renderAllMath);
+    } else {
+        renderAllMath();
+    }
+</script>
+
+</body>
+</html>

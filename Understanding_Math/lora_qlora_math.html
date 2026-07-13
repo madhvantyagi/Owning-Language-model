@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <!-- 
+        First-principles guide to the mathematics of LoRA and QLoRA.
+        Covers: VRAM constraints, intrinsic dimension, low-rank decomposition
+        (B × A), rank intuition, gradient derivation for A and B matrices,
+        asymmetric initialization trick, and NormalFloat4 (NF4) quantization.
+        Uses KaTeX for math rendering.
+    -->
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Mathematics of LoRA & QLoRA</title>
+    <!-- KaTeX for math rendering -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/contrib/auto-render.min.js"
+            onload="renderMathInElement(document.body, {delimiters: [{left: '$$', right: '$$', display: true}, {left: '$', right: '$', display: false}]});"></script>
+    <style>
+        :root {
+            --bg-color: #faf9f6;
+            --text-color: #111111;
+            --accent-red: #c92a2a;
+            --vintage-heading: #2c3e50;
+            --border-color: #d1cfc7;
+            --card-bg: #f3f1eb;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+            line-height: 1.6;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+
+        header {
+            border-bottom: 2px solid var(--text-color);
+            padding-bottom: 20px;
+            margin-bottom: 40px;
+        }
+
+        h1 {
+            color: var(--vintage-heading);
+            font-size: 24px;
+            margin: 0 0 10px 0;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        h2 {
+            color: var(--accent-red);
+            font-size: 18px;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 5px;
+            margin-top: 40px;
+        }
+
+        p, li { font-size: 14px; }
+        .highlight { color: var(--accent-red); font-weight: bold; }
+
+        .concept-box {
+            border: 1px solid var(--border-color);
+            padding: 20px;
+            background-color: var(--card-bg);
+            margin: 20px 0;
+        }
+
+        .formula-block {
+            background-color: var(--card-bg);
+            border-left: 4px solid var(--text-color);
+            padding: 15px;
+            margin: 20px 0;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+<body>
+
+<header>
+    <h1>The Mathematics of LoRA & QLoRA</h1>
+    <p>A First-Principles Journey from VRAM Constraints to Matrix Factorization</p>
+</header>
+
+<section>
+    <h2>1. The Physical Constraint: Why was LoRA Invented?</h2>
+    <div class="concept-box">
+        <strong>The Problem: Adam Optimizer is Memory-Hungry</strong>
+        <p>In standard backpropagation, for every single weight $w$ in the network, we must store:</p>
+        <ul>
+            <li>The weight itself (2 bytes in Float16)</li>
+            <li>The gradient $\frac{\partial \mathcal{L}}{\partial w}$ (2 bytes in Float16)</li>
+            <li>Adam's Momentum state $m$ (4 bytes in Float32)</li>
+            <li>Adam's Variance state $v$ (4 bytes in Float32)</li>
+        </ul>
+        <p>That is <strong>12 bytes of overhead per parameter</strong> just to run training! For a 7 Billion parameter model, this requires over 84 GB of VRAM. Researchers needed a way to teach massive models without needing an entire data center of GPUs.</p>
+    </div>
+</section>
+
+<section>
+    <h2>2. The Biological Insight: Intrinsic Dimension</h2>
+    <p>In 2020, researchers (Aghajanyan et al.) proved that heavily pre-trained models reside in a space with a very low <strong>"intrinsic dimension."</strong></p>
+    <p>What does this mean physically? It means the model already knows English, it knows logic, it knows facts. When we fine-tune it to be polite, or to output JSON, we are not rewriting its brain. We are just steering its existing knowledge slightly. We do not need to change all 4096 dimensions of a matrix to teach it a new trick; a tiny 8-dimensional subspace is sufficient.</p>
+</section>
+
+<section>
+    <h2>3. The Core Concept: What are $W_0$ and $\Delta W$?</h2>
+    <p>Before we decompose anything, we must be absolutely clear: <strong>$W_0$ and $\Delta W$ are entirely different objects.</strong></p>
+    <ul>
+        <li><strong>$W_0$ (The Pre-Trained Brain):</strong> This is the massive $4096 \times 4096$ matrix that contains all the knowledge the model learned during pre-training (grammar, facts, logic). It is a full-rank, incredibly complex matrix. <strong>We do not touch or decompose $W_0$.</strong> We freeze it perfectly as it is.</li>
+        <li><strong>$\Delta W$ (The Update):</strong> This is the <em>change</em> we want to make to $W_0$ to teach it a new trick (like formatting output as JSON). </li>
+    </ul>
+    <p>We define our new neural network layer mathematically as:</p>
+    <div class="formula-block">
+        $$W_{new} = W_0 + \Delta W$$
+    </div>
+</section>
+
+<section>
+    <h2>4. The Decomposition Trick: Why $B \times A$?</h2>
+    <p>If we try to learn $\Delta W$ normally, we have to learn all 16.7 million parameters. So instead, we <em>force</em> $\Delta W$ to be the product of two much smaller matrices: $A$ and $B$.</p>
+    <div class="formula-block">
+        $$\Delta W = B A$$
+    </div>
+    
+    <div class="concept-box">
+        <strong>Can any matrix be decomposed this way?</strong>
+        <p>You might ask: "Does $\Delta W$ already exist, and we are just breaking it apart?" <strong>No!</strong> We are not taking an existing matrix and factoring it. $\Delta W$ doesn't exist yet! We are initializing two tiny matrices, $A$ and $B$, from scratch.</p>
+        <p>By forcing the network to only use $A$ and $B$, we are putting a physical constraint on gradient descent. We are telling the optimizer: <em>"You must find the best possible update, but you are only allowed to build that update using these two small building blocks."</em></p>
+        <p>In linear algebra, multiplying an $r \times 4096$ matrix ($A$) by a $4096 \times r$ matrix ($B$) creates a massive $4096 \times 4096$ matrix. The dimensionality perfectly matches $\Delta W$, but its mathematical "rank" is artificially restricted to $r$.</p>
+    </div>
+</section>
+
+<section>
+    <h2>5. Multiple Perspectives on Rank ($r$)</h2>
+    <p>What exactly is this "rank" that we are restricting the update to? Let's look at it from three perspectives:</p>
+    
+    <div class="concept-box">
+        <strong>Linear Algebra Perspective (Degrees of Freedom):</strong>
+        <p>Rank is the number of linearly independent columns in a matrix. If $r=8$, it means our massive $4096 \times 4096$ update matrix ($\Delta W$) is actually just 8 distinct vector directions being scaled and added together. It is a massive matrix, but it only has 8 true "dimensions" of variance.</p>
+        
+        <strong>Information Theory Perspective (The Bandwidth Bottleneck):</strong>
+        <p>Think of rank as an internet connection. $W_0$ has a massive fiber-optic cable (rank 4096) that handles all human language. When we fine-tune, we force the new knowledge through a dial-up modem (rank 8). Why is this enough? Because the new knowledge ("just end the sentence with a question mark") has very low information density. It doesn't need fiber optics.</p>
+
+        <strong>Software Engineering Perspective (Hyperparameter Choice):</strong>
+        <p>How do we actually choose $r$ in practice?</p>
+        <ul>
+            <li><strong>$r=4$ or $8$:</strong> Simple stylistic changes (e.g., "be polite", "summarize this text").</li>
+            <li><strong>$r=16$ to $64$:</strong> Teaching the model a specific format (e.g., "always output valid JSON with these keys").</li>
+            <li><strong>$r=128$ to $256$:</strong> Teaching the model an entirely new language or complex coding syntax. You need a wider bottleneck to fit all that new vocabulary and structure.</li>
+        </ul>
+    </div>
+</section>
+
+<section>
+    <h2>6. Industry Practice: Where does LoRA go in a Transformer?</h2>
+    <p>A Transformer model (like Llama or Qwen) is made of dozens of layers. Each layer contains several different matrix multiplications:</p>
+    <ul>
+        <li><strong>Attention mechanism:</strong> $W_q$ (Queries), $W_k$ (Keys), $W_v$ (Values), $W_o$ (Output projection).</li>
+        <li><strong>MLP (Feed-Forward):</strong> $W_{gate}$, $W_{up}$, $W_{down}$.</li>
+    </ul>
+    
+    <div class="concept-box">
+        <strong>What do we actually do in practice?</strong>
+        <p>When researchers first invented LoRA, they only applied it to the Attention queries ($W_q$) and values ($W_v$) because they wanted to save as much memory as possible. They ignored the MLP layers entirely.</p>
+        <p>However, modern industry practice (what you will see in top research labs today) applies LoRA to <strong>ALL linear layers</strong> (often called <code>target_modules: "all-linear"</code>). Why?</p>
+        <p>Because the $A$ and $B$ matrices are so incredibly small, adding them to every single layer in the network barely increases VRAM usage (maybe from 14GB to 14.5GB), but it allows gradient descent to steer <em>every single part</em> of the model's brain simultaneously, resulting in vastly superior learning and reasoning performance.</p>
+    </div>
+</section>
+
+<section>
+    <h2>7. The Calculus: How do A and B update?</h2>
+    <p>Let's look at a single layer in the neural network. An input vector $x$ comes in, gets multiplied by the weights, and produces an output vector $h$ (which then goes to the next layer).</p>
+    
+    <p>With LoRA, the forward pass looks like this:</p>
+    <div class="formula-block">
+        $$h = W_0 x + B A x$$
+    </div>
+    
+    <div class="concept-box">
+        <strong>What is $h$?</strong>
+        <p>In neural networks, $h$ stands for "hidden state". It is literally the output vector of this specific layer. Think of it as the intermediate "thought" this layer produced before handing it off to the next layer.</p>
+    </div>
+
+    <p>During backpropagation, the loss function at the very end of the model calculates an error. This error flows backward through the network. When it reaches our layer, it gives us $\frac{\partial \mathcal{L}}{\partial h}$, which means: <em>"How much should we change this layer's output $h$ to reduce the final error?"</em></p>
+    
+    <p>But we can't change $h$ directly! We have to change the matrices $A$ and $B$. To do this, we apply the <strong>chain rule of matrix calculus</strong>. We ask: "How does $A$ affect $h$?" and "How does $B$ affect $h$?"</p>
+    
+    <div class="formula-block">
+        $$\frac{\partial \mathcal{L}}{\partial B} = \frac{\partial \mathcal{L}}{\partial h} (A x)^\top$$
+    </div>
+    <p><strong>Intuition for $B$:</strong> To update $B$, we take the error signal ($\frac{\partial \mathcal{L}}{\partial h}$) and multiply it by the input that $B$ received. What did $B$ physically receive? It received $A x$ (the compressed $r$-dimensional vector)!</p>
+
+    <div class="formula-block">
+        $$\frac{\partial \mathcal{L}}{\partial A} = B^\top \frac{\partial \mathcal{L}}{\partial h} x^\top$$
+    </div>
+    <p><strong>Intuition for $A$:</strong> To update $A$, the error signal ($\frac{\partial \mathcal{L}}{\partial h}$) first has to flow <em>backward</em> through $B$ (which is mathematically done by multiplying by $B^\top$). Then, we multiply that signal by the input that $A$ received (which is just $x$).</p>
+    
+    <p><em>(Notice how the gradient for $A$ depends on the current state of $B$, and vice versa. They learn in tandem! Yes, this is exactly the math that PyTorch's autograd engine is executing under the hood.)</em></p>
+</section>
+
+<section>
+    <h2>8. Software Engineering: The Initialization Trick</h2>
+    <div class="concept-box">
+        <strong>The Problem: Catastrophic Initialization</strong>
+        <p>If we initialize $A$ and $B$ randomly, on the very first training step, $B A x$ will output massive random noise. This noise gets added to the pre-trained model's output ($W_0 x$), instantly destroying the model's intelligence and causing the loss to explode.</p>
+        
+        <strong>The Solution: Asymmetric Initialization</strong>
+        <p>We initialize $A$ with random Gaussian noise (so symmetry is broken and it can learn). But we initialize $B$ with <strong>exactly zeros</strong>.</p>
+    </div>
+    <p>Because $B = 0$, on Step 1 of training, $\Delta W = B A = 0$. The model behaves <em>exactly</em> like the base pre-trained model. It starts from a safe, stable state and gently learns to deviate from it.</p>
+</section>
+
+<section>
+    <h2>9. QLoRA: The Statistics of NormalFloat4</h2>
+    <p>Even if we freeze $W_0$, a 7B parameter model still requires 14 GB of VRAM just to store the 16-bit Float $W_0$ matrix. How do we fit this on a consumer GPU?</p>
+    <p><strong>QLoRA (Quantized LoRA)</strong> proposes quantizing the frozen $W_0$ down to 4 bits.</p>
+    
+    <div class="concept-box">
+        <strong>The Physics Perspective: Why NF4?</strong>
+        <p>If you look at the weights of a trained neural network, they form a perfect Bell Curve (Normal Distribution) centered at 0. Most weights are tiny, very few are large.</p>
+        <p>Standard 4-bit integer quantization divides the number line into 16 evenly spaced buckets. But this is terribly inefficient! Most buckets at the edges will be empty, while the middle buckets will be overflowing, destroying precision where it matters most.</p>
+        <p><strong>NormalFloat4 (NF4)</strong> solves this using information theory. It places the 16 buckets non-linearly, clustering them tightly around 0 (where most weights are) and spacing them widely at the edges. Every bucket contains exactly 1/16th of the area under the Bell Curve. This guarantees maximum possible information retention for neural network weights.</p>
+    </div>
+
+    <p><strong>The Computation:</strong> During the forward pass, $W_0$ is stored in 4-bit. As the data $x$ flows through the layer, the 4-bit weights are instantly <em>dequantized</em> back to 16-bit in the GPU's ultra-fast SRAM, multiplied with $x$, and then thrown away. Matrix $A$ and $B$ are kept in pure 16-bit precision to maintain gradient fidelity.</p>
+</section>
+
+</body>
+</html>

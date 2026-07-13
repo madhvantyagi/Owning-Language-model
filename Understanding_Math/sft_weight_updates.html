@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <!-- 
+        Explains how gradients physically update weights during SFT.
+        Covers: geometry of the unembedding layer, dot-product logits,
+        outer-product gradient derivation (δ h^T), attractive/repulsive
+        forces on word vectors, and backpropagation through deep networks.
+        Uses KaTeX for math rendering.
+    -->
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SFT Weight Updates & First Principles</title>
+    <!-- KaTeX for math rendering -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/contrib/auto-render.min.js"
+            onload="renderMathInElement(document.body, {delimiters: [{left: '$$', right: '$$', display: true}, {left: '$', right: '$', display: false}]});"></script>
+    <style>
+        :root {
+            --bg-color: #faf9f6; /* Vintage off-white paper */
+            --text-color: #111111; /* Stark black */
+            --accent-red: #c92a2a; /* Crimson accent */
+            --vintage-heading: #2c3e50; /* Slate grey-blue */
+            --border-color: #d1cfc7; /* Muted paper border */
+            --card-bg: #f3f1eb; /* Slightly darker paper */
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+            line-height: 1.6;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+
+        header {
+            border-bottom: 2px solid var(--text-color);
+            padding-bottom: 20px;
+            margin-bottom: 40px;
+        }
+
+        h1 {
+            color: var(--vintage-heading);
+            font-size: 24px;
+            margin: 0 0 10px 0;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        h2 {
+            color: var(--accent-red);
+            font-size: 18px;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 5px;
+            margin-top: 40px;
+        }
+        
+        h3 {
+            color: var(--vintage-heading);
+            font-size: 16px;
+            margin-top: 30px;
+        }
+
+        p, li {
+            font-size: 14px;
+        }
+
+        .highlight {
+            color: var(--accent-red);
+            font-weight: bold;
+        }
+
+        .formula-block {
+            background-color: var(--card-bg);
+            border-left: 4px solid var(--text-color);
+            padding: 15px;
+            margin: 20px 0;
+            overflow-x: auto;
+        }
+        
+        .concept-box {
+            border: 1px solid var(--border-color);
+            padding: 20px;
+            background-color: var(--card-bg);
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+
+<header>
+    <h1>How Weights Actually Update in SFT</h1>
+    <p>Connecting Logit Gradients to Physical Changes in the Model's Brain</p>
+</header>
+
+<section>
+    <h2>The Problem: Why Update Weights?</h2>
+    <p>In our previous exploration, we found that the gradient of the loss with respect to our logits $\mathbf{z}$ is:</p>
+    <div class="formula-block">
+        $$\frac{\partial \mathcal{L}}{\partial \mathbf{z}} = \mathbf{p} - \mathbf{y}$$
+    </div>
+    <p>This tells us <strong>what</strong> to change: "Increase the score of the correct word, decrease the scores of the wrong words." But logits are just ephemeral numbers generated during a forward pass. They don't persist. To make the model smarter for tomorrow, we must change the <strong>permanent structures</strong> that created those logits: the weights.</p>
+</section>
+
+<section>
+    <h2>Perspective 1: The Geometry of the Output Layer</h2>
+    <p>How are logits created? Let's look at the very last step of a Large Language Model.</p>
+    <p>The Transformer has spent 80 layers processing the context and has finally produced a dense vector $\mathbf{h}$ (often called the <strong>hidden state</strong> or <strong>latent representation</strong>). This vector represents the model's "thought" about what should come next.</p>
+    
+    <p>To convert this "thought" into vocabulary scores, we multiply it by the final <strong>unembedding matrix</strong> $W$:</p>
+    <div class="formula-block">
+        $$\mathbf{z} = W \mathbf{h}$$
+    </div>
+    
+    <div class="concept-box">
+        <strong>The Geometric Viewpoint:</strong>
+        <p>Think of $W$ not as a grid of numbers, but as a dictionary of vectors. Every row $w_i$ in $W$ is an "embedding vector" for a specific word in the vocabulary. The logit for word $i$ is simply the dot product:</p>
+        <p>$$z_i = w_i \cdot \mathbf{h}$$</p>
+        <p>A dot product measures alignment. If the model's thought $\mathbf{h}$ points in the exact same direction as the word vector $w_i$, the score $z_i$ will be massive. If they are orthogonal, the score is zero.</p>
+    </div>
+</section>
+
+<section>
+    <h2>Deriving the Weight Update Step-by-Step</h2>
+    <p>We need to know how changing the matrix $W$ affects the loss $\mathcal{L}$. Using the chain rule from calculus:</p>
+    <div class="formula-block">
+        $$\frac{\partial \mathcal{L}}{\partial W} = \frac{\partial \mathcal{L}}{\partial \mathbf{z}} \frac{\partial \mathbf{z}}{\partial W}$$
+    </div>
+    
+    <p>We already know $\frac{\partial \mathcal{L}}{\partial \mathbf{z}} = \mathbf{p} - \mathbf{y}$. Let's denote this error vector as $\delta$.</p>
+    <p>Because $\mathbf{z} = W \mathbf{h}$, the derivative of $\mathbf{z}$ with respect to $W$ is just $\mathbf{h}^\top$. Thus, the gradient for the matrix $W$ is an outer product:</p>
+    
+    <div class="formula-block">
+        $$\frac{\partial \mathcal{L}}{\partial W} = \delta \mathbf{h}^\top = (\mathbf{p} - \mathbf{y}) \mathbf{h}^\top$$
+    </div>
+</section>
+
+<section>
+    <h2>Perspective 2: What is this equation actually doing?</h2>
+    <p>Let's look at the update for a single row $w_i$ (the vector representing the $i$-th word in the vocabulary).</p>
+    <p>The gradient for just this vector is:</p>
+    <div class="formula-block">
+        $$\frac{\partial \mathcal{L}}{\partial w_i} = (p_i - y_i) \mathbf{h}$$
+    </div>
+    
+    <p>In Gradient Descent, we update the weights by <strong>subtracting</strong> the gradient (scaled by a learning rate $\alpha$):</p>
+    <div class="formula-block">
+        $$w_i \leftarrow w_i - \alpha (p_i - y_i) \mathbf{h}$$
+    </div>
+    
+    <h3>Case A: The Correct Word ($y_c = 1$)</h3>
+    <p>For the correct word, $p_c$ is always less than 1 (e.g., 0.1). So $(p_c - 1)$ is negative (e.g., -0.9).</p>
+    <p>$$w_c \leftarrow w_c - \alpha (-0.9) \mathbf{h} = w_c + 0.9 \alpha \mathbf{h}$$</p>
+    <p><strong>Physical Meaning:</strong> We take the current "thought" vector $\mathbf{h}$ and <strong>add it</strong> to the correct word's vector $w_c$. By rotating $w_c$ to be more aligned with $\mathbf{h}$, the dot product $w_c \cdot \mathbf{h}$ will be much larger next time.</p>
+    
+    <h3>Case B: An Incorrect Word ($y_i = 0$)</h3>
+    <p>For an incorrect word, $p_i$ is positive (e.g., 0.2). So $(p_i - 0)$ is positive (e.g., +0.2).</p>
+    <p>$$w_i \leftarrow w_i - \alpha (+0.2) \mathbf{h} = w_i - 0.2 \alpha \mathbf{h}$$</p>
+    <p><strong>Physical Meaning:</strong> We take the current "thought" vector $\mathbf{h}$ and <strong>subtract it</strong> from the wrong word's vector $w_i$. We are pushing $w_i$ away from $\mathbf{h}$, ensuring their dot product is smaller next time.</p>
+</section>
+
+<section>
+    <h2>Perspective 3: The Deep Network Backpropagation</h2>
+    <p>Updating the final layer $W$ is only half the battle. What if the problem wasn't the dictionary $W$, but the "thought" $\mathbf{h}$ itself? What if the Transformer generated a stupid thought?</p>
+    
+    <p>We must also update the parameters deep inside the 80 layers that created $\mathbf{h}$. To do this, we need the gradient of the loss with respect to $\mathbf{h}$:</p>
+    
+    <div class="formula-block">
+        $$\frac{\partial \mathcal{L}}{\partial \mathbf{h}} = W^\top \frac{\partial \mathcal{L}}{\partial \mathbf{z}} = W^\top (\mathbf{p} - \mathbf{y})$$
+    </div>
+    
+    <p><strong>What is this physically?</strong> It is a weighted sum of the vocabulary vectors. The model looks at the error for every single word, scales the corresponding word vector $w_i$ by its error $(p_i - y_i)$, and adds them all up.</p>
+    
+    <p>This combined vector tells the lower layers of the neural network: <em>"Hey, your thought $\mathbf{h}$ was wrong. You should have pushed it more in this direction, and less in that direction."</em> This signal then flows backward through all 80 layers (Attention, MLPs, LayerNorms), adjusting every single weight in the network via the exact same chain rule principles.</p>
+</section>
+
+<section>
+    <h2>What About the VRAM Crisis?</h2>
+    <p>Updating the massive $W$ matrices natively takes hundreds of gigabytes of VRAM. To understand how we mathematically bypass this using matrix decomposition, see the dedicated guide: <a href="lora_qlora_math.html">The Mathematics of LoRA & QLoRA</a>.</p>
+</section>
+
+<section>
+    <h2>Key Takeaways</h2>
+    <ul>
+        <li><strong>Loss isn't just a number:</strong> It creates a highly structured gradient vector that describes exactly how wrong every single logit was.</li>
+        <li><strong>Gradients are forces:</strong> The gradient acts as an attractive force pulling the correct word vector toward the model's current hidden state, and a repulsive force pushing incorrect words away.</li>
+        <li><strong>Information flows backward:</strong> The error from the vocabulary prediction is translated back into the continuous vector space of the model's hidden states, allowing it to correct the millions of parameters that generated the thought.</li>
+    </ul>
+</section>
+
+</body>
+</html>
